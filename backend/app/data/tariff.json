@@ -1,0 +1,72 @@
+{
+  "HV": {
+    "TwoStage": {
+      "base_prices": { "summer": 223.6, "non_summer": 166.9 },
+      "non_summer_base_prices": { "summer": 0.0, "non_summer": 166.9 },
+      "half_peak_base_prices": { "summer": 0.0, "non_summer": 0.0 },
+      "saturday_base_prices": { "summer": 44.7, "non_summer": 33.3 },
+      "off_peak_base_prices": { "summer": 44.7, "non_summer": 33.3 },
+      "prices": {
+        "summer": { "peak": 6.75, "saturday_half_peak": 2.77, "off_peak": 2.71 },
+        "non_summer": { "peak": 6.37, "saturday_half_peak": 2.54, "off_peak": 2.46 }
+      }
+    },
+    "ThreeStage": {
+      "base_prices": { "summer": 223.6, "non_summer": 166.9 },
+      "non_summer_base_prices": { "summer": 0.0, "non_summer": 0.0 },
+      "half_peak_base_prices": { "summer": 166.9, "non_summer": 166.9 },
+      "saturday_base_prices": { "summer": 44.7, "non_summer": 33.3 },
+      "off_peak_base_prices": { "summer": 44.7, "non_summer": 33.3 },
+      "prices": {
+        "summer": { "peak": 9.39, "half_peak": 5.85, "saturday_half_peak": 2.6, "off_peak": 2.53 },
+        "non_summer": { "half_peak": 5.47, "saturday_half_peak": 2.41, "off_peak": 2.32 }
+      }
+    },
+    "BatchStage": {
+      "base_prices": { "summer": 223.6, "non_summer": 166.9 },
+      "non_summer_base_prices": { "summer": 0.0, "non_summer": 166.9 },
+      "half_peak_base_prices": { "summer": 0.0, "non_summer": 0.0 },
+      "saturday_base_prices": { "summer": 44.7, "non_summer": 33.3 },
+      "off_peak_base_prices": { "summer": 44.7, "non_summer": 33.3 },
+      "prices": {
+        "summer": { "peak": 12.47, "saturday_half_peak": 3.26, "off_peak": 3.18 },
+        "non_summer": { "peak": 11.79, "saturday_half_peak": 3.0, "off_peak": 2.88 }
+      }
+    }
+  },
+  "EHV": {
+    "TwoStage": {
+      "base_prices": { "summer": 217.3, "non_summer": 160.6 },
+      "non_summer_base_prices": { "summer": 0.0, "non_summer": 160.6 },
+      "half_peak_base_prices": { "summer": 0.0, "non_summer": 0.0 },
+      "saturday_base_prices": { "summer": 43.4, "non_summer": 32.1 },
+      "off_peak_base_prices": { "summer": 43.4, "non_summer": 32.1 },
+      "prices": {
+        "summer": { "peak": 6.17, "saturday_half_peak": 2.73, "off_peak": 2.55 },
+        "non_summer": { "peak": 5.79, "saturday_half_peak": 2.48, "off_peak": 2.28 }
+      }
+    },
+    "ThreeStage": {
+      "base_prices": { "summer": 217.3, "non_summer": 160.6 },
+      "non_summer_base_prices": { "summer": 0.0, "non_summer": 0.0 },
+      "half_peak_base_prices": { "summer": 160.6, "non_summer": 160.6 },
+      "saturday_base_prices": { "summer": 43.4, "non_summer": 32.1 },
+      "off_peak_base_prices": { "summer": 43.4, "non_summer": 32.1 },
+      "prices": {
+        "summer": { "peak": 8.69, "half_peak": 5.38, "saturday_half_peak": 2.5, "off_peak": 2.4 },
+        "non_summer": { "half_peak": 5.03, "saturday_half_peak": 2.31, "off_peak": 2.18 }
+      }
+    },
+    "BatchStage": {
+      "base_prices": { "summer": 217.3, "non_summer": 160.6 },
+      "non_summer_base_prices": { "summer": 0.0, "non_summer": 160.6 },
+      "half_peak_base_prices": { "summer": 0.0, "non_summer": 0.0 },
+      "saturday_base_prices": { "summer": 43.4, "non_summer": 32.1 },
+      "off_peak_base_prices": { "summer": 43.4, "non_summer": 32.1 },
+      "prices": {
+        "summer": { "peak": 11.44, "saturday_half_peak": 3.2, "off_peak": 2.99 },
+        "non_summer": { "peak": 10.8, "saturday_half_peak": 2.89, "off_peak": 2.67 }
+      }
+    }
+  }
+}

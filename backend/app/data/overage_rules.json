@@ -1,0 +1,6 @@
+{
+  "tiers": [
+    { "label": "first_10pct", "upto_contract_ratio": 0.10, "rate_multiplier": 2.0 },
+    { "label": "beyond_10pct", "upto_contract_ratio": null, "rate_multiplier": 3.0 }
+  ]
+}

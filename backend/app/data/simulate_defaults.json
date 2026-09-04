@@ -1,0 +1,14 @@
+{
+  "simulateTou": "ThreeStage",
+  "autoAdjustOffPeakContract": false,
+  "demandBufferKw": 10,
+  "antiExportKw": 10,
+  "backupReserveKwh": 0,
+  "touScheduleMode": "auto",
+  "reserveScheduleMode": "auto",
+  "largeUserRatio": 0.1,
+  "largeUserPowerRatio": 0.8,
+  "socMin": 0.1,
+  "socMax": 0.9,
+  "chargeEff": 0.85
+}

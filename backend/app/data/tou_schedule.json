@@ -1,0 +1,285 @@
+{
+  "summer_range": {
+    "start_month": 5,
+    "start_day": 16,
+    "end_month": 10,
+    "end_day": 15
+  },
+  "TwoStage": {
+    "step_minutes": 60,
+    "summer": {
+      "weekday": [
+        {
+          "start": 0,
+          "end": 9,
+          "period": "off_peak"
+        },
+        {
+          "start": 9,
+          "end": 24,
+          "period": "peak"
+        }
+      ],
+      "saturday": [
+        {
+          "start": 0,
+          "end": 9,
+          "period": "off_peak"
+        },
+        {
+          "start": 9,
+          "end": 24,
+          "period": "saturday_half_peak"
+        }
+      ],
+      "sunday": [
+        {
+          "start": 0,
+          "end": 24,
+          "period": "off_peak"
+        }
+      ]
+    },
+    "non_summer": {
+      "weekday": [
+        {
+          "start": 0,
+          "end": 6,
+          "period": "off_peak"
+        },
+        {
+          "start": 6,
+          "end": 11,
+          "period": "peak"
+        },
+        {
+          "start": 11,
+          "end": 14,
+          "period": "off_peak"
+        },
+        {
+          "start": 14,
+          "end": 24,
+          "period": "peak"
+        }
+      ],
+      "saturday": [
+        {
+          "start": 0,
+          "end": 6,
+          "period": "off_peak"
+        },
+        {
+          "start": 6,
+          "end": 11,
+          "period": "saturday_half_peak"
+        },
+        {
+          "start": 11,
+          "end": 14,
+          "period": "off_peak"
+        },
+        {
+          "start": 14,
+          "end": 24,
+          "period": "saturday_half_peak"
+        }
+      ],
+      "sunday": [
+        {
+          "start": 0,
+          "end": 24,
+          "period": "off_peak"
+        }
+      ]
+    }
+  },
+  "ThreeStage": {
+    "step_minutes": 60,
+    "summer": {
+      "weekday": [
+        {
+          "start": 0,
+          "end": 9,
+          "period": "off_peak"
+        },
+        {
+          "start": 9,
+          "end": 16,
+          "period": "half_peak"
+        },
+        {
+          "start": 16,
+          "end": 22,
+          "period": "peak"
+        },
+        {
+          "start": 22,
+          "end": 24,
+          "period": "half_peak"
+        }
+      ],
+      "saturday": [
+        {
+          "start": 0,
+          "end": 9,
+          "period": "off_peak"
+        },
+        {
+          "start": 9,
+          "end": 24,
+          "period": "saturday_half_peak"
+        }
+      ],
+      "sunday": [
+        {
+          "start": 0,
+          "end": 24,
+          "period": "off_peak"
+        }
+      ]
+    },
+    "non_summer": {
+      "weekday": [
+        {
+          "start": 0,
+          "end": 6,
+          "period": "off_peak"
+        },
+        {
+          "start": 6,
+          "end": 11,
+          "period": "half_peak"
+        },
+        {
+          "start": 11,
+          "end": 14,
+          "period": "off_peak"
+        },
+        {
+          "start": 14,
+          "end": 24,
+          "period": "half_peak"
+        }
+      ],
+      "saturday": [
+        {
+          "start": 0,
+          "end": 6,
+          "period": "off_peak"
+        },
+        {
+          "start": 6,
+          "end": 11,
+          "period": "saturday_half_peak"
+        },
+        {
+          "start": 11,
+          "end": 14,
+          "period": "off_peak"
+        },
+        {
+          "start": 14,
+          "end": 24,
+          "period": "saturday_half_peak"
+        }
+      ],
+      "sunday": [
+        {
+          "start": 0,
+          "end": 24,
+          "period": "off_peak"
+        }
+      ]
+    }
+  },
+  "BatchStage": {
+    "step_minutes": 30,
+    "summer": {
+      "weekday": [
+        {
+          "start": 0,
+          "end": 15.5,
+          "period": "off_peak"
+        },
+        {
+          "start": 15.5,
+          "end": 21.5,
+          "period": "peak"
+        },
+        {
+          "start": 21.5,
+          "end": 24,
+          "period": "off_peak"
+        }
+      ],
+      "saturday": [
+        {
+          "start": 0,
+          "end": 15.5,
+          "period": "off_peak"
+        },
+        {
+          "start": 15.5,
+          "end": 21.5,
+          "period": "saturday_half_peak"
+        },
+        {
+          "start": 21.5,
+          "end": 24,
+          "period": "off_peak"
+        }
+      ],
+      "sunday": [
+        {
+          "start": 0,
+          "end": 24,
+          "period": "off_peak"
+        }
+      ]
+    },
+    "non_summer": {
+      "weekday": [
+        {
+          "start": 0,
+          "end": 15.5,
+          "period": "off_peak"
+        },
+        {
+          "start": 15.5,
+          "end": 21.5,
+          "period": "peak"
+        },
+        {
+          "start": 21.5,
+          "end": 24,
+          "period": "off_peak"
+        }
+      ],
+      "saturday": [
+        {
+          "start": 0,
+          "end": 15.5,
+          "period": "off_peak"
+        },
+        {
+          "start": 15.5,
+          "end": 21.5,
+          "period": "saturday_half_peak"
+        },
+        {
+          "start": 21.5,
+          "end": 24,
+          "period": "off_peak"
+        }
+      ],
+      "sunday": [
+        {
+          "start": 0,
+          "end": 24,
+          "period": "off_peak"
+        }
+      ]
+    }
+  }
+}

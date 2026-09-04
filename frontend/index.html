@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BTM Optimize</title>
+  <link rel="stylesheet" href="/vendor/fontawesome/css/all.min.css" />
+  <link rel="icon" href="/assets/seetel_logo_s.png" type="image/png" />
+  <link rel="stylesheet" href="/css/style.css?v=22" />
+</head>
+<body>
+  <div id="app" class="app-shell">
+    <aside id="sidebar" class="sidebar-wrapper">
+      <a href="/import" class="sidebar-logo-area" id="sidebar-logo">
+        <img src="/assets/seetel_logo_white.png" alt="SEETEL LOGO" class="logo-img logo-img-full" />
+        <img src="/assets/seetel_logo_s.png" alt="SEETEL LOGO" class="logo-img logo-img-compact" />
+      </a>
+
+      <nav class="sidebar-nav" id="sidebar-nav">
+        <a href="/import" class="nav-item" data-route="import" data-i18n-title="nav.items.import">
+          <i class="fa-solid fa-file-import nav-icon"></i>
+          <span class="nav-text" data-i18n="nav.items.import"></span>
+        </a>
+        <a href="/charts" class="nav-item" data-route="charts" data-i18n-title="nav.items.charts">
+          <i class="fa-solid fa-chart-area nav-icon"></i>
+          <span class="nav-text" data-i18n="nav.items.charts"></span>
+        </a>
+        <a href="/dashboard" class="nav-item" data-route="dashboard" data-i18n-title="nav.items.dashboard">
+          <i class="fa-solid fa-table nav-icon"></i>
+          <span class="nav-text" data-i18n="nav.items.dashboard"></span>
+        </a>
+        <a href="/simulate" class="nav-item" data-route="simulate" data-i18n-title="nav.items.simulate">
+          <i class="fa-solid fa-battery-half nav-icon"></i>
+          <span class="nav-text" data-i18n="nav.items.simulate"></span>
+        </a>
+        <a href="/settings" class="nav-item" data-route="settings" data-i18n-title="nav.items.settings">
+          <i class="fa-solid fa-gear nav-icon"></i>
+          <span class="nav-text" data-i18n="nav.items.settings"></span>
+        </a>
+      </nav>
+
+      <div class="sidebar-footer">
+        <button
+          type="button"
+          class="lang-toggle"
+          id="lang-toggle"
+          data-i18n-aria="nav.languageToggle"
+          data-i18n-title="nav.language"
+        >
+          <i class="fa-solid fa-globe nav-icon"></i>
+          <span class="nav-text">
+            <span id="lang-zh" class="lang-active">中</span>
+            /
+            <span id="lang-en">EN</span>
+          </span>
+        </button>
+      </div>
+    </aside>
+
+    <main id="main-content" class="main-content overflow-y-auto custom-scrollbar">
+      <div id="page-root"></div>
+    </main>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/echarts/5.5.0/echarts.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <script src="/js/main.js?v=65"></script>
+</body>
+</html>
