@@ -539,7 +539,48 @@ def main() -> None:
     assert ca["applied"] is True
     assert ca["off_peak_kw_after"] == 45.0
 
-    print("ok recommended", rec, "grid", len(out["grid"]), "contract_adj", ca["added_kw"])
+    # 即時備轉：同步帳單 + 額外收益恆等式；不混入 energy
+    reserve_settings = {
+        "functions": ["tou", "reserve"],
+        "touScheduleMode": "auto",
+        "reserveScheduleMode": "manual",
+        "reserveSchedule": {
+            "summer": {"weekday": [0.0] * 10 + [0.5] + [0.0] * 13, "saturday": [0.0] * 24, "sunday": [0.0] * 24},
+            "non_summer": {"weekday": [0.0] * 24, "saturday": [0.0] * 24, "sunday": [0.0] * 24},
+        },
+        "reserveCapacityPrice": 200,
+        "reservePerformancePrice": 100,
+        "reserveEnergyPrice": 1000,
+        "reserveMonthlyDispatchCount": 1,
+        "socMin": 0.1,
+        "socMax": 0.9,
+        "chargeEff": 0.85,
+        "antiExportKw": 0,
+        "simulateTou": "ThreeStage",
+    }
+    reserve_contracts = ContractCapacity(regular_kw=2000).to_dict()
+    # 縮小網格：只跑 sample 後的第一個點級別會慢；用短 df
+    r_df = _df().copy()
+    r_out = run_size(
+        r_df,
+        plan,
+        reserve_contracts,
+        reserve_settings,
+        tou_type="ThreeStage",
+        start_date=str(r_df["date"].min()),
+        end_date=str(r_df["date"].max()),
+        voltage_level="HV",
+    )
+    ri = r_out.get("reserve_income") or {}
+    assert "capacity" in ri and "performance" in ri and "activation_energy" in ri
+    assert "energy" not in ri
+    assert int(ri.get("capacity") or 0) > 0
+    bill_save = int(r_out.get("bill_savings") or 0)
+    assert int(r_out["savings"]) == bill_save + int(ri.get("total") or 0)
+    assert int((r_out.get("after") or {}).get("energy_total") or 0) >= 0
+    assert "energy" not in (r_out.get("after") or {})
+
+    print("ok recommended", rec, "grid", len(out["grid"]), "contract_adj", ca["added_kw"], "reserve", ri.get("total"))
 
 
 if __name__ == "__main__":

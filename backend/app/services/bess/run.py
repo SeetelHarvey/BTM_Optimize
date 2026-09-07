@@ -252,6 +252,17 @@ def _dispatch_metrics(
     return out
 
 
+def _make_device(settings: dict[str, Any], *, pcs_kw: float, batt_kwh: float) -> Device:
+    return Device(
+        pcs_kw=pcs_kw,
+        batt_kwh=batt_kwh,
+        soc_min=float(settings.get("socMin", 0.1)),
+        soc_max=float(settings.get("socMax", 0.9)),
+        charge_eff=float(settings.get("chargeEff", 0.85)),
+        anti_export_kw=float(settings.get("antiExportKw", 0.0)),
+    )
+
+
 def _dispatch_for_point(
     df: pd.DataFrame,
     plan: dict,
@@ -263,27 +274,63 @@ def _dispatch_for_point(
     tou_type: str,
     tou_step: int,
     period_schedule: dict | None = None,
-) -> pd.DataFrame:
-    """單一 (pcs,batt) dispatch 序列。"""
-    dev = Device(
-        pcs_kw=pcs_kw,
-        batt_kwh=batt_kwh,
-        soc_min=float(settings.get("socMin", 0.1)),
-        soc_max=float(settings.get("socMax", 0.9)),
-        charge_eff=float(settings.get("chargeEff", 0.85)),
-        anti_export_kw=float(settings.get("antiExportKw", 0.0)),
-    )
-    bids = None
-    if "reserve" in (settings.get("functions") or []):
-        bids = reserve.resolve_bids_series(
+) -> tuple[pd.DataFrame, dict[str, Any] | None]:
+    """單一 (pcs,batt) dispatch；若開備轉則疊事件並回傳 reserve_income。"""
+    dev = _make_device(settings, pcs_kw=pcs_kw, batt_kwh=batt_kwh)
+    use_reserve = "reserve" in (settings.get("functions") or [])
+    local = dict(settings)
+
+    if not use_reserve:
+        disp = run(
             df,
-            settings,
-            step_minutes=tou_step,
+            dev,
+            local,
+            tou_type=tou_type,
+            contracts=contracts,
+            tou_step_minutes=tou_step,
+            bid_series=None,
+            prices=plan.get("prices"),
+            period_schedule=period_schedule,
         )
-    return run(
+        return disp, None
+
+    reserve.validate_inputs(local)
+    mode = str(local.get("reserveScheduleMode") or "auto").lower()
+
+    if mode == "auto":
+        seed = run(
+            df,
+            dev,
+            local,
+            tou_type=tou_type,
+            contracts=contracts,
+            tou_step_minutes=tou_step,
+            bid_series=reserve.resolve_bids_series(
+                df,
+                {**local, "reserveSchedule": reserve.empty_schedule()},
+                step_minutes=tou_step,
+            ),
+            prices=plan.get("prices"),
+            period_schedule=period_schedule,
+        )
+        sched, auto_meta = reserve.build_auto_schedule(
+            df,
+            seed,
+            dev,
+            step_minutes=tou_step,
+            capacity_price=float(local.get("reserveCapacityPrice") or 0),
+            performance_price=float(local.get("reservePerformancePrice") or 0),
+        )
+        local = {**local, "reserveSchedule": sched, "reserveScheduleMode": "manual"}
+    else:
+        auto_meta = None
+        sched = local.get("reserveSchedule")
+
+    bids = reserve.resolve_bids_series(df, local, step_minutes=tou_step)
+    standby = run(
         df,
         dev,
-        settings,
+        local,
         tou_type=tou_type,
         contracts=contracts,
         tou_step_minutes=tou_step,
@@ -291,6 +338,14 @@ def _dispatch_for_point(
         prices=plan.get("prices"),
         period_schedule=period_schedule,
     )
+    final, bids2, income, meta = reserve.run_reserve_layer(
+        df, standby, dev, local, step_minutes=tou_step
+    )
+    if auto_meta is not None:
+        meta["mode"] = "auto"
+        meta["auto"] = auto_meta
+        meta["recommended_schedule"] = sched
+    return final, {"income": income, "meta": meta, "bids_mw_mean": float(bids2.mean())}
 
 
 def _size_workers(n_tasks: int) -> int:
@@ -397,16 +452,23 @@ def _simulate_grid_rows(
     for pcs_kw, batt_kwh, after_summary in summaries:
         after_by_key[(pcs_kw, batt_kwh)] = after_summary
         after_total = int(after_summary["total"])
+        bill_savings = before_total - after_total
+        reserve_total = int((after_summary.get("reserve_income") or {}).get("total") or 0)
+        total_benefit = bill_savings + reserve_total
         rows.append(
             {
                 "pcs_kw": pcs_kw,
                 "batt_kwh": batt_kwh,
                 "hours": round(batt_kwh / pcs_kw, 3) if pcs_kw > 0 else 0,
-                "savings": before_total - after_total,
+                "bill_savings": bill_savings,
+                "reserve_income_total": reserve_total,
+                "savings": total_benefit,
                 "after_total": after_total,
                 "after_basic_total": int(after_summary.get("basic_total") or 0),
                 "after_overage_total": int(after_summary.get("overage_total") or 0),
                 "after_energy_total": int(after_summary.get("energy_total") or 0),
+                "reserve_income": after_summary.get("reserve_income"),
+                "reserve_meta": after_summary.get("reserve_meta"),
                 **{k: after_summary[k] for k in _METRIC_KEYS},
             }
         )
@@ -429,8 +491,8 @@ def _simulate_point(
     overage_rules: dict | None,
     period_schedule: dict | None = None,
 ) -> dict[str, Any]:
-    """單一 (pcs,batt) dispatch + 計費。"""
-    disp = _dispatch_for_point(
+    """單一 (pcs,batt) dispatch + 計費（備轉收入另計）。"""
+    disp, reserve_info = _dispatch_for_point(
         df,
         plan,
         contracts,
@@ -453,8 +515,18 @@ def _simulate_point(
         voltage_level=voltage_level,
         overage_rules=overage_rules,
     )
+    bill = _bill_totals(after)
+    reserve_income = (reserve_info or {}).get("income") or {
+        "capacity": 0,
+        "performance": 0,
+        "activation_energy": 0,
+        "total": 0,
+        "monthly": {},
+        "events": [],
+        "data_note": "15min_estimate",
+    }
     return {
-        **_bill_totals(after),
+        **bill,
         **_dispatch_metrics(
             disp,
             pcs_kw=pcs_kw,
@@ -463,6 +535,9 @@ def _simulate_point(
             soc_max=float(settings.get("socMax", 0.9)),
             charge_eff=float(settings.get("chargeEff", 0.85)),
         ),
+        "reserve_income": reserve_income,
+        "reserve_meta": (reserve_info or {}).get("meta"),
+        "bill_savings": None,  # 由外層填 before - after
     }
 
 
@@ -547,6 +622,17 @@ def run_size(
         )
 
     savings = int(highlight["savings"]) if highlight else 0
+    bill_savings = int(highlight.get("bill_savings") or savings) if highlight else 0
+    reserve_income = (highlight or {}).get("reserve_income") or {
+        "capacity": 0,
+        "performance": 0,
+        "activation_energy": 0,
+        "total": 0,
+        "monthly": {},
+        "events": [],
+        "data_note": "15min_estimate",
+    }
+    reserve_meta = (highlight or {}).get("reserve_meta")
 
     dispatch_charts = None
     if highlight:
@@ -576,6 +662,9 @@ def run_size(
         "best_effort": best_effort,
         "max_util": max_util,
         "savings": savings,
+        "bill_savings": bill_savings,
+        "reserve_income": reserve_income,
+        "reserve_meta": reserve_meta,
         "savings_pct": highlight["savings_pct"] if highlight else 0.0,
         "before": before_summary,
         "after": after_rec,
@@ -600,7 +689,7 @@ def run_dispatch_charts(
         df, contracts, sim_settings, tou_type
     )
     tou_step = int(plan.get("tou_slot_minutes") or 60)
-    disp = _dispatch_for_point(
+    disp, _reserve_info = _dispatch_for_point(
         df,
         plan,
         effective_contracts,

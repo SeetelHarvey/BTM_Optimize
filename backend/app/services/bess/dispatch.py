@@ -113,11 +113,14 @@ def run(
             )
 
         if use_reserve and bid_series is not None:
-            lo, hi = reserve.hard_occupy(
+            bid_mw = float(bid_series.iloc[i])
+            lo, hi = reserve.hard_occupy(lo, hi, bid_mw, dev.pcs_kw)
+            lo, hi = reserve.narrow_standby_soc(
                 lo,
                 hi,
-                float(bid_series.iloc[i]),
-                dev.pcs_kw,
+                soc=soc,
+                bid_mw=bid_mw,
+                device=dev,
             )
 
         cap_kw = None

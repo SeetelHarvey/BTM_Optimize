@@ -221,14 +221,49 @@ const I18N = {
       antiExportKw: "負載預留（kW）",
       antiExportHint: "不逆送",
       gridReserve: "用電預留",
-      fnHint: "時間電價固定；勾選其他功能可展開設定。",
       scheduleMode: "排程設定",
       scheduleAuto: "自動",
       scheduleManual: "手動",
+      scheduleEdit: "編輯排程",
+      scheduleDone: "完成",
+      reserveRecTitle: "推薦投標排程",
+      reserveP5Note: "自動投標取歷史可履約量第 5 百分位（約 95% 事件可達標），接受約 5% 尾端失敗風險，並非保證每一次調度都能通過。",
+      reserveViewRec: "檢視推薦矩陣",
+      reserveUseAsManual: "改為手動並套用",
       touTargetSoc: "目標 SOC（%）",
       reserveBidMw: "投標量體（MW）",
       reserveMaxLabel: "投標上限",
       reserveNoContract: "尚未填寫經常契約",
+      reserveCapacityPrice: "容量費（元／MW·h）",
+      reservePerformancePrice: "效能費（元／MW·h）",
+      reserveEnergyPrice: "調度電能價格（元／MWh）",
+      reserveMonthlyDispatchCount: "每月調度次數",
+      reserveSectionTitle: "即時備轉",
+      reserveIncomeCap: "容量費",
+      reserveIncomePerf: "效能費",
+      reserveIncomeEnergy: "調度電能",
+      reserveIncomeTotal: "合計",
+      reserveBillSavings: "電費節省",
+      reserveTotalBenefit: "整體效益",
+      reserveNetAfter: "試算後淨成本",
+      reserveCredit: "備轉額外收入",
+      reserveMonthlyTitle: "月結算",
+      reserveEvents: "調度事件",
+      reserveEventDate: "日期",
+      reserveEventBid: "投標（MW）",
+      reserveEventResult: "結果",
+      reserveEventOk: "通過",
+      reserveEventFail: "未通過",
+      reserveFailPcs: "PCS 餘裕不足",
+      reserveFailRecovery: "恢復逾時",
+      reserveFailCbl: "CBL 不足",
+      reserveFailSoc: "SOC 不足",
+      reserveFailAntiExport: "不逆送限制",
+      reserveFailFactoryRise: "廠內負載上升",
+      reserveMonth: "月份",
+      reserveBidMwh: "得標 MW·h",
+      reserveQuality: "品質係數",
+      reserveDeliveredMwh: "交付 MWh",
       summer: "夏月",
       nonSummer: "非夏月",
       weekday: "平日",
@@ -464,14 +499,49 @@ const I18N = {
       antiExportKw: "Load reserve (kW)",
       antiExportHint: "No reverse export",
       gridReserve: "Site reserve",
-      fnHint: "TOU is always on; check other functions to unlock their tab.",
       scheduleMode: "Schedule",
       scheduleAuto: "Auto",
       scheduleManual: "Manual",
+      scheduleEdit: "Edit schedule",
+      scheduleDone: "Done",
+      reserveRecTitle: "Recommended bid schedule",
+      reserveP5Note: "Auto bids use the 5th percentile of historical deliverable capacity (~95% of events pass). About 5% tail risk remains — not a guarantee for every dispatch.",
+      reserveViewRec: "View recommended matrix",
+      reserveUseAsManual: "Switch to manual & apply",
       touTargetSoc: "Target SOC (%)",
       reserveBidMw: "Bid quantity (MW)",
       reserveMaxLabel: "Bid max",
       reserveNoContract: "No regular contract",
+      reserveCapacityPrice: "Capacity fee (NTD/MW·h)",
+      reservePerformancePrice: "Performance fee (NTD/MW·h)",
+      reserveEnergyPrice: "Activation energy (NTD/MWh)",
+      reserveMonthlyDispatchCount: "Dispatches / month",
+      reserveSectionTitle: "Spinning reserve",
+      reserveIncomeCap: "Capacity fee",
+      reserveIncomePerf: "Performance fee",
+      reserveIncomeEnergy: "Activation energy",
+      reserveIncomeTotal: "Total",
+      reserveBillSavings: "Bill savings",
+      reserveTotalBenefit: "Overall benefit",
+      reserveNetAfter: "Net cost after",
+      reserveCredit: "Reserve credit",
+      reserveMonthlyTitle: "Monthly settlement",
+      reserveEvents: "Dispatch events",
+      reserveEventDate: "Date",
+      reserveEventBid: "Bid (MW)",
+      reserveEventResult: "Result",
+      reserveEventOk: "Pass",
+      reserveEventFail: "Fail",
+      reserveFailPcs: "PCS headroom",
+      reserveFailRecovery: "Recovery overtime",
+      reserveFailCbl: "CBL shortfall",
+      reserveFailSoc: "SOC shortfall",
+      reserveFailAntiExport: "Anti-export limit",
+      reserveFailFactoryRise: "Factory load rise",
+      reserveMonth: "Month",
+      reserveBidMwh: "Won MW·h",
+      reserveQuality: "Quality coeff.",
+      reserveDeliveredMwh: "Delivered MWh",
       summer: "Summer",
       nonSummer: "Non-summer",
       weekday: "Weekday",
@@ -490,7 +560,29 @@ const I18N = {
 };
 
 const LOCALE_KEY = "btm_optimize-locale";
-const SESSION_KEY = "btm_optimize-session-v3";
+const SESSION_KEY = "btm_optimize-session-v5";
+
+/** 與 backend/app/data/simulate_defaults.json 對齊；開機即可用，不依賴 API 回來後再灌。 */
+const BUILTIN_SIMULATE_DEFAULTS = Object.freeze({
+  simulateTou: "ThreeStage",
+  autoAdjustOffPeakContract: false,
+  demandBufferKw: 10,
+  antiExportKw: 10,
+  backupReserveKwh: 0,
+  touScheduleMode: "auto",
+  reserveScheduleMode: "auto",
+  reserveCapacityPrice: 200,
+  reservePerformancePrice: 100,
+  reserveEnergyPrice: 5000,
+  reserveMonthlyDispatchCount: 2,
+  largeUserRatio: 0.1,
+  largeUserPowerRatio: 0.8,
+  socMin: 0.1,
+  socMax: 0.9,
+  chargeEff: 0.85,
+});
+
+let simulateDefaults = { ...BUILTIN_SIMULATE_DEFAULTS };
 const ROUTES = { DASHBOARD: "dashboard", CHARTS: "charts", IMPORT: "import", SIMULATE: "simulate", SETTINGS: "settings" };
 
 let locale = localStorage.getItem(LOCALE_KEY) === "en" ? "en" : "zh-TW";
@@ -570,8 +662,6 @@ function normalizeScheduleMatrix(raw, factory) {
 
 const LARGE_USER_MIN_KW = 5000; // 用電大戶法規門檻（經常契約）
 
-let simulateDefaults = {};
-
 function clamp01(v, fallback) {
   const n = Number(v);
   return Number.isFinite(n) ? Math.max(0, Math.min(1, n)) : fallback;
@@ -634,7 +724,7 @@ function targetSocPct(season, period, nextPeriod, chargeEff) {
 }
 
 function baseSimulateTemplate() {
-  const d = simulateDefaults || {};
+  const d = { ...BUILTIN_SIMULATE_DEFAULTS, ...simulateDefaults };
   const tou = TOU_OPTIONS.includes(d.simulateTou) ? d.simulateTou : "ThreeStage";
   return {
     functions: ["tou"],
@@ -653,26 +743,51 @@ function pctDisplay(v) {
   return Number.isFinite(n) ? Math.round(n * 1000) / 10 : 0;
 }
 
+function _finiteOr(baseVal, raw) {
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : Number(baseVal) || 0;
+}
+
 function normalizeSimulate(raw) {
   const src = raw && typeof raw === "object" ? raw : {};
   const base = baseSimulateTemplate();
   const sim = { ...base };
+
+  // 只覆寫使用者有帶的欄位；缺欄用預設（內建或 API）
   for (const key of Object.keys(base)) {
-    if (Object.prototype.hasOwnProperty.call(src, key)) sim[key] = src[key];
+    if (!Object.prototype.hasOwnProperty.call(src, key)) continue;
+    const v = src[key];
+    if (v === undefined || v === null || v === "") continue;
+    sim[key] = v;
   }
+
   const opts = (sim.functions || []).filter((f) => f !== "tou");
   sim.functions = ["tou", ...opts];
   if (!TOU_OPTIONS.includes(sim.simulateTou)) sim.simulateTou = base.simulateTou;
   sim.touSchedule = normalizeScheduleMatrix(sim.touSchedule, () => defaultTouSlots(sim.simulateTou));
   sim.reserveSchedule = normalizeScheduleMatrix(sim.reserveSchedule, defaultReserveHourly);
-  sim.chargeEff = Math.max(0.5, Math.min(1, clamp01(sim.chargeEff, 0.85)));
-  let lo = clamp01(sim.socMin, 0.1);
-  let hi = clamp01(sim.socMax, 0.9);
+
+  sim.chargeEff = Math.max(0.5, Math.min(1, clamp01(sim.chargeEff, base.chargeEff)));
+  let lo = clamp01(sim.socMin, base.socMin);
+  let hi = clamp01(sim.socMax, base.socMax);
   if (lo > hi) [lo, hi] = [hi, lo];
   sim.socMin = lo;
   sim.socMax = hi;
   sim.autoAdjustOffPeakContract = !!sim.autoAdjustOffPeakContract;
-  sim.backupReserveKwh = Math.max(0, Number(sim.backupReserveKwh) || 0);
+
+  sim.backupReserveKwh = Math.max(0, _finiteOr(base.backupReserveKwh, sim.backupReserveKwh));
+  sim.demandBufferKw = Math.max(0, _finiteOr(base.demandBufferKw, sim.demandBufferKw));
+  sim.antiExportKw = Math.max(0, _finiteOr(base.antiExportKw, sim.antiExportKw));
+  sim.reserveCapacityPrice = Math.max(0, _finiteOr(base.reserveCapacityPrice, sim.reserveCapacityPrice));
+  sim.reservePerformancePrice = Math.max(0, _finiteOr(base.reservePerformancePrice, sim.reservePerformancePrice));
+  sim.reserveEnergyPrice = Math.max(0, _finiteOr(base.reserveEnergyPrice, sim.reserveEnergyPrice));
+  sim.reserveMonthlyDispatchCount = Math.max(
+    0,
+    Math.floor(_finiteOr(base.reserveMonthlyDispatchCount, sim.reserveMonthlyDispatchCount)),
+  );
+  sim.largeUserRatio = Math.max(0, Math.min(1, _finiteOr(base.largeUserRatio, sim.largeUserRatio)));
+  sim.largeUserPowerRatio = Math.max(0, Math.min(1, _finiteOr(base.largeUserPowerRatio, sim.largeUserPowerRatio)));
+
   if (!["auto", "manual"].includes(sim.touScheduleMode)) sim.touScheduleMode = "auto";
   if (!["auto", "manual"].includes(sim.reserveScheduleMode)) sim.reserveScheduleMode = "auto";
   return sim;
@@ -700,8 +815,7 @@ const session = {
   importId: null,
   importRowCount: null,
   simulate: normalizeSimulate({}),
-  _hadPersistedSimulate: false,
-  _simulateDefaultsReady: false,
+  _settingsLoaded: false,
 };
 
 function persistSession() {
@@ -733,10 +847,9 @@ function restoreSession() {
   try {
     const data = JSON.parse(sessionStorage.getItem(SESSION_KEY) || "null");
     if (!data || typeof data !== "object") return;
-    session._hadPersistedSimulate = !!(data.simulate && typeof data.simulate === "object");
     Object.assign(session, data);
     session.file = null;
-    session._simulateDefaultsReady = false;
+    session._settingsLoaded = false;
     session.simulate = normalizeSimulate(session.simulate);
     session.lastSimulateSize = normalizeSimulateSizeResult(session.lastSimulateSize);
     session.importRowCount = session.importRowCount != null ? Number(session.importRowCount) : null;
@@ -1396,6 +1509,44 @@ let simulateJob = 0;
 let simPinnedRun = null;
 /** 清除結果後短暫顯示的摘要卡 */
 let simDismissedSnapshot = null;
+/** @type {null | "tou" | "reserve" | "reserve-rec"} 排程矩陣彈窗 */
+let simScheduleModal = null;
+let simScheduleEscBound = false;
+
+function closeScheduleModal({ reread = true } = {}) {
+  if (!simScheduleModal) return;
+  if (reread) readSimulateForm();
+  simScheduleModal = null;
+  renderPage({ animate: false, preserveScroll: true });
+}
+
+function scheduleModalHostEl() {
+  let host = document.getElementById("simSchedModalHost");
+  if (host) return host;
+  host = document.createElement("div");
+  host.id = "simSchedModalHost";
+  document.body.appendChild(host);
+  return host;
+}
+
+function syncScheduleModalHost() {
+  const host = scheduleModalHostEl();
+  if (parseRoute() !== ROUTES.SIMULATE || !simScheduleModal) {
+    host.innerHTML = "";
+    document.body.classList.remove("sim-sched-modal-open");
+    return;
+  }
+  const T = I18N[locale].simulate;
+  host.innerHTML = renderScheduleModal(T, session.simulate);
+  document.body.classList.add("sim-sched-modal-open");
+  host.querySelectorAll("[data-sched-close]").forEach((el) => {
+    el.addEventListener("click", () => closeScheduleModal());
+  });
+  host.querySelectorAll("[data-sched]").forEach((el) => {
+    el.addEventListener("change", () => readSimulateForm());
+    el.addEventListener("input", () => readSimulateForm());
+  });
+}
 
 function chartsFormData() {
   const fd = new FormData();
@@ -2202,25 +2353,18 @@ function bindImport() {
 
 async function ensureSettingsLoaded(opts) {
   const reloadRates = !!(opts && opts.reloadRates);
-  if (!reloadRates && session.rates && session.schedule && session._simulateDefaultsReady) {
-    return true;
-  }
+  if (!reloadRates && session._settingsLoaded) return true;
   try {
     const data = await apiJson("/api/settings/defaults");
     if (reloadRates || !session.rates) session.rates = data.rates;
     if (reloadRates || !session.schedule) session.schedule = data.schedule;
     if (reloadRates || session.holidays == null) session.holidays = data.holidays;
-    const needSimulateSeed = !session._simulateDefaultsReady;
     if (data.simulate && typeof data.simulate === "object") {
-      simulateDefaults = data.simulate;
+      simulateDefaults = { ...BUILTIN_SIMULATE_DEFAULTS, ...data.simulate };
+      // 補齊缺欄；已有值（含使用者改成 0）保留
+      session.simulate = normalizeSimulate(session.simulate);
     }
-    session._simulateDefaultsReady = true;
-    // 僅首次灌入伺服器預設；設定頁重載電價不得清掉試算 input
-    if (needSimulateSeed) {
-      session.simulate = normalizeSimulate(
-        session._hadPersistedSimulate ? session.simulate : {},
-      );
-    }
+    session._settingsLoaded = true;
     return true;
   } catch {
     return false;
@@ -2617,7 +2761,9 @@ function renderSimMatrix(schedKey, matrix, T, cfg) {
         const cell = hours[i];
         const val = cell == null || cell === "" ? "" : cell;
         const ph = schedKey === "touSchedule" ? ` placeholder="—"` : "";
-        html += `<td ${bg}><input class="sim-matrix__input" type="number" data-sched="${schedKey}" data-season="${season}" data-day="${day}" data-slot="${i}"${minAttr}${maxAttr}${stepAttr}${ph} value="${val}"></td>`;
+        const ro = (cfg.readonly || cfg.viewOnly) ? " readonly" : "";
+        const schedAttr = cfg.viewOnly ? "" : ` data-sched="${schedKey}"`;
+        html += `<td ${bg}><input class="sim-matrix__input" type="number"${schedAttr} data-season="${season}" data-day="${day}" data-slot="${i}"${minAttr}${maxAttr}${stepAttr}${ph}${ro} value="${val}"></td>`;
       }
       html += "</tr>";
     }
@@ -2637,25 +2783,251 @@ function simPeriodLegend(T) {
 
 function renderScheduleBlock(prefix, modeKey, schedKey, sim, T, cfg) {
   const mode = sim[modeKey];
-  const open = mode === "manual";
   const badge = cfg.badge ? `<span class="sim-schedule__badge">${cfg.badge}</span>` : "";
-  return `<div class="sim-schedule">
+  // 自動：僅切換，不提供檢視／編輯入口
+  if (mode === "auto") {
+    return `<div class="sim-schedule sim-schedule--compact" data-sched-block="${prefix}">
+      <div class="sim-schedule__bar">
+        <div class="sim-schedule__lead">
+          <span class="sim-schedule__title"><i class="fa-solid fa-calendar-days"></i> ${T.scheduleMode}</span>
+          ${badge}
+        </div>
+        <div class="sim-schedule__actions">
+          <div class="sim-schedule__switch" role="group">
+            <label class="sim-seg sim-seg--on">
+              <input type="radio" name="${modeKey}" value="auto" checked> ${T.scheduleAuto}
+            </label>
+            <label class="sim-seg">
+              <input type="radio" name="${modeKey}" value="manual"> ${T.scheduleManual}
+            </label>
+          </div>
+        </div>
+      </div>
+    </div>`;
+  }
+  return `<div class="sim-schedule" data-sched-block="${prefix}">
     <div class="sim-schedule__bar">
       <div class="sim-schedule__lead">
         <span class="sim-schedule__title"><i class="fa-solid fa-calendar-days"></i> ${T.scheduleMode}</span>
         ${badge}
       </div>
-      <div class="sim-schedule__switch" role="group">
-        <label class="sim-seg${mode === "auto" ? " sim-seg--on" : ""}">
-          <input type="radio" name="${modeKey}" value="auto"${mode === "auto" ? " checked" : ""}> ${T.scheduleAuto}
-        </label>
-        <label class="sim-seg${mode === "manual" ? " sim-seg--on" : ""}">
-          <input type="radio" name="${modeKey}" value="manual"${mode === "manual" ? " checked" : ""}> ${T.scheduleManual}
-        </label>
+      <div class="sim-schedule__actions">
+        <div class="sim-schedule__switch" role="group">
+          <label class="sim-seg">
+            <input type="radio" name="${modeKey}" value="auto"> ${T.scheduleAuto}
+          </label>
+          <label class="sim-seg sim-seg--on">
+            <input type="radio" name="${modeKey}" value="manual" checked> ${T.scheduleManual}
+          </label>
+        </div>
+        <button type="button" class="btm-btn btm-btn--ghost sim-schedule__open" data-sched-open="${prefix}">
+          <i class="fa-solid fa-table" aria-hidden="true"></i> ${T.scheduleEdit}
+        </button>
       </div>
     </div>
-    <div class="sim-schedule__grid${open ? " sim-schedule__grid--open" : ""}" id="${prefix}HourlyGrid">
-      ${renderSimMatrix(schedKey, sim[schedKey], T, cfg)}
+  </div>`;
+}
+
+function simFnPanel(active, panel, body) {
+  return `<div class="sim-tab-panel${active ? "" : " sim-tab-panel--hidden"}" data-panel="${panel}">
+    <div class="sim-fn-card">
+      <div class="sim-fn-card__body">${body}</div>
+    </div>
+  </div>`;
+}
+
+function reserveFailLabel(T, reason) {
+  const key = String(reason || "");
+  if (key === "pcs_headroom") return T.reserveFailPcs;
+  if (key === "recovery") return T.reserveFailRecovery;
+  if (key === "cbl") return T.reserveFailCbl;
+  if (key === "soc" || key === "energy" || key === "low_soc") return T.reserveFailSoc;
+  if (key === "anti_export") return T.reserveFailAntiExport;
+  if (key === "factory_load_rise") return T.reserveFailFactoryRise;
+  return key || T.reserveEventFail;
+}
+
+function renderReserveRecommendedBlock(T, res) {
+  const meta = res.reserve_meta || {};
+  const rec = meta.recommended_schedule;
+  if (!rec || (meta.mode !== "auto" && !meta.auto)) return "";
+  return `<div class="sim-reserve-panel__rec">
+    <h3 class="btm-subhead">${T.reserveRecTitle}</h3>
+    <p class="sim-reserve-panel__warn">${T.reserveP5Note}</p>
+    <div class="sim-reserve-panel__actions">
+      <button type="button" class="btm-btn btm-btn--ghost" data-sched-open-rec>
+        <i class="fa-solid fa-table" aria-hidden="true"></i> ${T.reserveViewRec}
+      </button>
+      <button type="button" class="btm-btn btm-btn--ghost" data-reserve-apply-manual>${T.reserveUseAsManual}</button>
+    </div>
+  </div>`;
+}
+
+function renderReserveReportBlock(T, res) {
+  const ri = res.reserve_income || {};
+  const credit = Number(ri.total || 0);
+  const hasFn = (res.functions || []).includes("reserve");
+  if (!hasFn && credit === 0) return "";
+
+  const days = simReportDays();
+  const afterBill = Number(res.after && res.after.total) || 0;
+  const afterNet = afterBill - credit;
+  const monthlyRows = Object.entries(ri.monthly || {}).sort(([a], [b]) => a.localeCompare(b));
+  const events = Array.isArray(ri.events) ? ri.events : [];
+
+  const monthTable = monthlyRows.length ? `
+    <details class="sim-reserve-fold">
+      <summary class="sim-reserve-fold__summary">
+        <span>${T.reserveMonthlyTitle}</span>
+        <span class="btm-chip btm-chip--dim">${monthlyRows.length}</span>
+      </summary>
+      <div class="sim-reserve-fold__body">
+        <div class="sim-reserve-table-wrap">
+          <table class="sim-reserve-table">
+            <thead><tr>
+              <th>${T.reserveMonth}</th>
+              <th>${T.reserveBidMwh}</th>
+              <th>${T.reserveIncomeCap}</th>
+              <th>${T.reserveIncomePerf}</th>
+              <th>${T.reserveIncomeEnergy}</th>
+              <th>${T.reserveIncomeTotal}</th>
+            </tr></thead>
+            <tbody>${monthlyRows.map(([m, b]) => `<tr>
+              <td>${m}</td>
+              <td>${fmt(b.bid_mwh, 1)}</td>
+              <td>${fmt(b.capacity)}</td>
+              <td>${fmt(b.performance)}</td>
+              <td>${fmt(b.activation_energy)}</td>
+              <td>${fmt(b.total)}</td>
+            </tr>`).join("")}</tbody>
+          </table>
+        </div>
+      </div>
+    </details>` : "";
+
+  const eventTable = events.length ? `
+    <details class="sim-reserve-fold">
+      <summary class="sim-reserve-fold__summary">
+        <span>${T.reserveEvents}</span>
+        <span class="btm-chip btm-chip--dim">${events.length}</span>
+      </summary>
+      <div class="sim-reserve-fold__body">
+        <div class="sim-reserve-table-wrap">
+          <table class="sim-reserve-table">
+            <thead><tr>
+              <th>${T.reserveEventDate}</th>
+              <th>${T.reserveEventBid}</th>
+              <th>${T.reserveQuality}</th>
+              <th>${T.reserveDeliveredMwh}</th>
+              <th>${T.reserveEventResult}</th>
+            </tr></thead>
+            <tbody>${events.map((e) => {
+              const ok = !!e.strict_ok;
+              const result = ok
+                ? `<span class="sim-reserve-ok">${T.reserveEventOk}</span>`
+                : `<span class="sim-reserve-fail">${reserveFailLabel(T, e.fail_reason)}</span>`;
+              return `<tr>
+                <td>${e.date || e.month || "—"}</td>
+                <td>${fmt(e.bid_mw, 1)}</td>
+                <td>${fmt(e.official_quality, 2)}</td>
+                <td>${fmt((Number(e.delivered_kwh) || 0) / 1000, 3)}</td>
+                <td>${result}</td>
+              </tr>`;
+            }).join("")}</tbody>
+          </table>
+        </div>
+      </div>
+    </details>` : "";
+
+  return `<section class="btm-card hud-panel hud-frame sim-reserve-panel">
+    <h2 class="btm-card__title seetel-title">${T.reserveSectionTitle}</h2>
+    <div class="dash-kpis sim-reserve-panel__kpis">
+      ${dashKpiHtml(T.reserveIncomeTotal, credit, days, " dash-kpi--energy")}
+      ${dashKpiHtml(T.reserveIncomeCap, ri.capacity || 0, days)}
+      ${dashKpiHtml(T.reserveIncomePerf, ri.performance || 0, days)}
+      ${dashKpiHtml(T.reserveIncomeEnergy, ri.activation_energy || 0, days)}
+    </div>
+    <p class="btm-meta sim-reserve-panel__formula">${T.simKpiAfter} ${fmt(afterBill)} − ${T.reserveCredit} ${fmt(credit)} = ${T.reserveNetAfter} ${fmt(afterNet)}</p>
+    ${monthTable}
+    ${eventTable}
+    ${renderReserveRecommendedBlock(T, res)}
+  </section>`;
+}
+
+function scheduleModalConfig(kind, sim, T) {
+  if (kind === "tou") {
+    const tou = activeSimulateTou();
+    return {
+      kind,
+      title: `${T.touTargetSoc} · ${tou}`,
+      modeKey: "touScheduleMode",
+      schedKey: "touSchedule",
+      matrix: sim.touSchedule,
+      cfg: {
+        header: T.touTargetSoc,
+        min: 0,
+        max: 100,
+        step: 1,
+        slotMinutes: touStepMinutes(tou),
+        touType: tou,
+        readonly: sim.touScheduleMode !== "manual",
+      },
+    };
+  }
+  if (kind === "reserve" || kind === "reserve-rec") {
+    const maxMw = simMaxReserveBidMw();
+    const recOnly = kind === "reserve-rec";
+    const matrix = recOnly
+      ? (normalizeSimulateSizeResult(session.lastSimulateSize)?.reserve_meta?.recommended_schedule
+        || sim.reserveSchedule)
+      : sim.reserveSchedule;
+    return {
+      kind: "reserve",
+      title: recOnly ? T.reserveRecTitle : T.reserveBidMw,
+      modeKey: "reserveScheduleMode",
+      schedKey: "reserveSchedule",
+      matrix,
+      cfg: {
+        header: T.reserveBidMw,
+        min: 0,
+        max: maxMw > 0 ? maxMw : undefined,
+        step: 0.1,
+        slotMinutes: 60,
+        readonly: recOnly || sim.reserveScheduleMode !== "manual",
+        viewOnly: recOnly,
+        badge: maxMw > 0
+          ? `<span class="btm-chip btm-chip--dim">${T.reserveMaxLabel} ${maxMw} MW</span>`
+          : `<span class="btm-chip btm-chip--warn">${T.reserveNoContract}</span>`,
+      },
+    };
+  }
+  return null;
+}
+
+function renderScheduleModal(T, sim) {
+  const spec = scheduleModalConfig(simScheduleModal, sim, T);
+  if (!spec) return "";
+  const mode = sim[spec.modeKey];
+  const badge = spec.cfg.badge ? `<span class="sim-schedule__badge">${spec.cfg.badge}</span>` : "";
+  const modeChip = simScheduleModal === "reserve-rec"
+    ? `<span class="btm-chip btm-chip--dim">${T.scheduleAuto}</span>`
+    : `<span class="btm-chip btm-chip--dim">${mode === "manual" ? T.scheduleManual : T.scheduleAuto}</span>`;
+  return `<div class="sim-sched-modal" id="simSchedModal" role="dialog" aria-modal="true" aria-labelledby="simSchedModalTitle">
+    <button type="button" class="sim-sched-modal__backdrop" data-sched-close tabindex="-1" aria-label="${T.scheduleDone}"></button>
+    <div class="sim-sched-modal__panel hud-panel hud-frame">
+      <header class="sim-sched-modal__head">
+        <div class="sim-sched-modal__titles">
+          <h3 id="simSchedModalTitle" class="sim-sched-modal__title">${spec.title}</h3>
+        </div>
+        <div class="sim-sched-modal__head-actions">
+          ${badge}
+          ${modeChip}
+          <button type="button" class="btm-btn btm-btn--primary" data-sched-close>${T.scheduleDone}</button>
+        </div>
+      </header>
+      <div class="sim-sched-modal__body" id="${spec.kind}HourlyGrid">
+        ${renderSimMatrix(spec.schedKey, spec.matrix, T, spec.cfg)}
+      </div>
     </div>
   </div>`;
 }
@@ -2697,15 +3069,33 @@ function readSimulateForm() {
   document.querySelectorAll("[data-sim]").forEach((el) => {
     const key = el.dataset.sim;
     if (!key || !(key in baseSimulateTemplate())) return;
-    sim[key] = el.tagName === "SELECT" ? el.value : Number(el.value);
+    // SOC／效率由表單 % 另轉，這裡不讀
+    if (key === "chargeEff" || key === "socMin" || key === "socMax") return;
+    if (el.tagName === "SELECT") {
+      sim[key] = el.value;
+      return;
+    }
+    const raw = String(el.value).trim();
+    if (raw === "") return;
+    const n = Number(raw);
+    if (!Number.isFinite(n)) return;
+    sim[key] = n;
   });
   // 表單 % → session 小數（SOC／效率）
-  if (document.querySelector('[data-sim="chargeEff"]')) {
-    sim.chargeEff = Math.max(0.5, Math.min(1, (Number(sim.chargeEff) || 85) / 100));
+  const effEl = document.querySelector('[data-sim="chargeEff"]');
+  if (effEl) {
+    const pct = Number(effEl.value);
+    if (Number.isFinite(pct)) sim.chargeEff = Math.max(0.5, Math.min(1, pct / 100));
   }
-  if (document.querySelector('[data-sim="socMin"]') || document.querySelector('[data-sim="socMax"]')) {
-    let lo = Math.max(0, Math.min(1, (Number(sim.socMin) || 0) / 100));
-    let hi = Math.max(0, Math.min(1, (Number(sim.socMax) || 0) / 100));
+  const loEl = document.querySelector('[data-sim="socMin"]');
+  const hiEl = document.querySelector('[data-sim="socMax"]');
+  if (loEl || hiEl) {
+    let lo = loEl && String(loEl.value).trim() !== "" ? Number(loEl.value) / 100 : sim.socMin;
+    let hi = hiEl && String(hiEl.value).trim() !== "" ? Number(hiEl.value) / 100 : sim.socMax;
+    if (!Number.isFinite(lo)) lo = sim.socMin;
+    if (!Number.isFinite(hi)) hi = sim.socMax;
+    lo = Math.max(0, Math.min(1, lo));
+    hi = Math.max(0, Math.min(1, hi));
     if (lo > hi) [lo, hi] = [hi, lo];
     sim.socMin = lo;
     sim.socMax = hi;
@@ -2737,8 +3127,6 @@ function syncSimulateTabs() {
     el.classList.toggle("sim-tab-panel--hidden", !on);
     el.setAttribute("aria-hidden", on ? "false" : "true");
   });
-  document.getElementById("touHourlyGrid")?.classList.toggle("sim-schedule__grid--open", sim.touScheduleMode === "manual");
-  document.getElementById("reserveHourlyGrid")?.classList.toggle("sim-schedule__grid--open", sim.reserveScheduleMode === "manual");
   document.querySelectorAll(".sim-seg").forEach((el) => {
     const input = el.querySelector("input");
     if (input) el.classList.toggle("sim-seg--on", input.checked);
@@ -3007,17 +3395,25 @@ function simBillCompareHtml(res, T, row) {
   const r = row || simViewRow(res);
   if (!r) return `<p class="btm-meta">—</p>`;
   const before = res.before || {};
+  const ri = (r.reserve_income && r.reserve_income.total != null)
+    ? r.reserve_income
+    : (res.reserve_income || {});
+  const credit = Number(ri.total || 0);
+  const hasReserve = (res.functions || []).includes("reserve") || credit !== 0;
   const after = {
     basic_total: r.after_basic_total,
     overage_total: r.after_overage_total,
     energy_total: r.after_energy_total,
     total: r.after_total,
   };
+  const afterNet = Number(after.total || 0) - credit;
+  const beforeTotal = Number(before.total || 0);
   const delta = {
     basic_total: Number(after.basic_total || 0) - Number(before.basic_total || 0),
     overage_total: Number(after.overage_total || 0) - Number(before.overage_total || 0),
     energy_total: Number(after.energy_total || 0) - Number(before.energy_total || 0),
-    total: Number(after.total || 0) - Number(before.total || 0),
+    total: Number(after.total || 0) - beforeTotal,
+    net: afterNet - beforeTotal,
   };
   const rows = [
     [t("dashboard.basic"), before.basic_total, after.basic_total, delta.basic_total],
@@ -3025,6 +3421,10 @@ function simBillCompareHtml(res, T, row) {
     [t("dashboard.energy"), before.energy_total, after.energy_total, delta.energy_total],
     [t("dashboard.total"), before.total, after.total, delta.total],
   ];
+  if (hasReserve) {
+    rows.push([T.reserveCredit, 0, -credit, -credit]);
+    rows.push([T.reserveNetAfter, before.total, afterNet, delta.net]);
+  }
   const body = rows.map(([label, b, a, d]) => `<tr>
       <td>${label}</td>
       <td class="num">${fmt(b)}</td>
@@ -3036,7 +3436,7 @@ function simBillCompareHtml(res, T, row) {
       <thead><tr>
         <th>${t("dashboard.item")}</th>
         <th class="num">${T.simKpiBefore}</th>
-        <th class="num">${T.simKpiAfter}</th>
+        <th class="num">${hasReserve ? T.reserveNetAfter : T.simKpiAfter}</th>
         <th class="num">Δ</th>
       </tr></thead>
       <tbody>${body}</tbody>
@@ -3925,7 +4325,7 @@ function renderSimReportSection(T) {
     </section>`;
   }
 
-  return renderSimulateResult(T, res);
+  return `${renderSimulateResult(T, res)}`;
 }
 
 function activeSimulateSample() {
@@ -4107,6 +4507,12 @@ function renderSimulateResult(T, res) {
     : `<p class="sim-report__warn btm-meta btm-meta--err">${T.simNoViable}</p>`;
   const sizeLabel = viable ? T.simKpiSize : T.simTagBest;
   const saveKpiClass = Number(res.savings) >= 0 ? " dash-kpi--energy" : " dash-kpi--loss";
+  const ri = res.reserve_income || {};
+  const credit = Number(ri.total || 0);
+  const hasReserve = (res.functions || []).includes("reserve") || credit !== 0;
+  const beforeTotal = Number(res.before && res.before.total) || 0;
+  const afterBill = Number(res.after && res.after.total) || 0;
+  const afterNet = hasReserve ? afterBill - credit : afterBill;
   const metaLine = (() => {
     let s = T.simSampleMeta
       .replace("{pts}", res.grid_points != null ? res.grid_points : (res.grid || []).length)
@@ -4126,8 +4532,8 @@ function renderSimulateResult(T, res) {
       ${simContractAdjustChip(T, res.contract_adjustment)}
     </div>
     <div class="dash-kpis sim-report__kpis">
-      ${dashKpiHtml(T.simKpiBefore, res.before && res.before.total, days)}
-      ${dashKpiHtml(T.simKpiAfter, res.after && res.after.total, days)}
+      ${dashKpiHtml(T.simKpiBefore, beforeTotal, days)}
+      ${dashKpiHtml(hasReserve ? T.reserveNetAfter : T.simKpiAfter, afterNet, days)}
       ${dashKpiHtml(T.simKpiSave, res.savings, days, saveKpiClass)}
       <article class="dash-kpi hud-panel hud-frame${viable ? " dash-kpi--total" : ""}">
         <div class="dash-kpi__label">${sizeLabel}</div>
@@ -4136,7 +4542,9 @@ function renderSimulateResult(T, res) {
         · <span>${T.simKpiSavePct}</span> <strong>${fmt(r.savings_pct != null ? r.savings_pct : res.savings_pct, 1)}%</strong></div>
       </article>
     </div>
-
+  </section>
+  ${renderReserveReportBlock(T, res)}
+  <section class="btm-card hud-panel hud-frame sim-report sim-report--detail">
     <h3 class="btm-subhead">${T.simSavingsChart}</h3>
     <div id="simSavingsChart" class="sim-savings-chart" role="img" aria-label="${T.simSavingsChart}"></div>
 
@@ -4172,7 +4580,6 @@ function renderSimulateParams(T, sim) {
 function renderSimulateFunctions(T, sim) {
   return `<section class="btm-card hud-panel hud-frame" id="simDetails">
       <h2 class="btm-card__title seetel-title">${T.functions}</h2>
-      <p class="btm-meta sim-fn-hint">${T.fnHint}</p>
       ${renderSimulateTabs(T, sim)}
       <div class="sim-tab-panels">
         ${renderSimulatePanelTou(T, sim)}
@@ -4209,7 +4616,7 @@ function renderSimulate() {
 
 function renderSimulatePanelTou(T, sim) {
   const tou = activeSimulateTou();
-  return `<div class="sim-tab-panel${sim.detailTab === "tou" ? "" : " sim-tab-panel--hidden"}" data-panel="tou">
+  return simFnPanel(sim.detailTab === "tou", "tou", `
     ${renderScheduleBlock("tou", "touScheduleMode", "touSchedule", sim, T, {
       header: T.touTargetSoc,
       min: 0,
@@ -4218,21 +4625,27 @@ function renderSimulatePanelTou(T, sim) {
       slotMinutes: touStepMinutes(tou),
       touType: tou,
     })}
-  </div>`;
+  `);
 }
 
 function renderSimulatePanelDemand(T, sim) {
-  return `<div class="sim-tab-panel${sim.detailTab === "demand" ? "" : " sim-tab-panel--hidden"}" data-panel="demand">
+  return simFnPanel(sim.detailTab === "demand", "demand", `
     <label class="sim-check sim-check--block">
       <input type="checkbox" data-sim-check="autoAdjustOffPeakContract"${sim.autoAdjustOffPeakContract ? " checked" : ""}>
       ${T.offPeakContractBoost}
     </label>
-  </div>`;
+  `);
 }
 
 function renderSimulatePanelReserve(T, sim) {
   const maxMw = simMaxReserveBidMw();
-  return `<div class="sim-tab-panel${sim.detailTab === "reserve" ? "" : " sim-tab-panel--hidden"}" data-panel="reserve">
+  return simFnPanel(sim.detailTab === "reserve", "reserve", `
+    <div class="btm-row">
+      ${simNumField("reserveCapacityPrice", T.reserveCapacityPrice, sim.reserveCapacityPrice, 1, 0)}
+      ${simNumField("reservePerformancePrice", T.reservePerformancePrice, sim.reservePerformancePrice, 1, 0)}
+      ${simNumField("reserveEnergyPrice", T.reserveEnergyPrice, sim.reserveEnergyPrice, 1, 0)}
+      ${simNumField("reserveMonthlyDispatchCount", T.reserveMonthlyDispatchCount, sim.reserveMonthlyDispatchCount, 1, 0)}
+    </div>
     ${renderScheduleBlock("reserve", "reserveScheduleMode", "reserveSchedule", sim, T, {
       header: T.reserveBidMw,
       min: 0,
@@ -4243,15 +4656,15 @@ function renderSimulatePanelReserve(T, sim) {
         ? `<span class="btm-chip btm-chip--dim">${T.reserveMaxLabel} ${maxMw} MW</span>`
         : `<span class="btm-chip btm-chip--warn">${T.reserveNoContract}</span>`,
     })}
-  </div>`;
+  `);
 }
 
 function renderSimulatePanelBackup(T, sim) {
-  return `<div class="sim-tab-panel${sim.detailTab === "backup" ? "" : " sim-tab-panel--hidden"}" data-panel="backup">
+  return simFnPanel(sim.detailTab === "backup", "backup", `
     <div class="btm-row">
       ${simNumField("backupReserveKwh", T.backupReserveKwh, sim.backupReserveKwh, 1, 0, undefined, T.backupReserveHint)}
     </div>
-  </div>`;
+  `);
 }
 
 function renderSimulatePanelLargeUser(T, sim) {
@@ -4264,15 +4677,16 @@ function renderSimulatePanelLargeUser(T, sim) {
     : `<div class="sim-obl-preview">
         <div class="sim-obl-preview__item"><span>${T.largeUserMinKw}</span><strong class="${applies ? "sim-obl--ok" : "sim-obl--warn"}">${applies ? T.largeUserApplies : T.largeUserExempt}（≥ ${LARGE_USER_MIN_KW} kW）</strong></div>
         <div class="sim-obl-preview__item"><span>${T.largeUserOblKw}</span><strong>${oblKw} kW</strong></div>
+        <div class="sim-obl-preview__item"><span>${T.largeUserRatio}</span><strong>${fmt(ratio * 100, 0)}%</strong></div>
       </div>`;
 
-  return `<div class="sim-tab-panel${sim.detailTab === "large_user" ? "" : " sim-tab-panel--hidden"}" data-panel="large_user">
+  return simFnPanel(sim.detailTab === "large_user", "large_user", `
     <div class="btm-row">
       ${simNumField("largeUserRatio", T.largeUserRatio, sim.largeUserRatio, 0.01, 0, 1)}
       ${simNumField("largeUserPowerRatio", T.largeUserPowerRatio, sim.largeUserPowerRatio, 0.01, 0, 1)}
     </div>
     ${preview}
-  </div>`;
+  `);
 }
 
 function bindSimulate() {
@@ -4308,10 +4722,51 @@ function bindSimulate() {
   });
   document.querySelectorAll('[name="touScheduleMode"], [name="reserveScheduleMode"]').forEach((el) => {
     el.addEventListener("change", () => {
+      const prevRes = session.simulate.reserveScheduleMode;
       readSimulateForm();
-      syncSimulateTabs();
+      // 備轉切手動：若有推薦結果可先套用，但不自動彈窗
+      if (el.name === "reserveScheduleMode" && el.value === "manual" && prevRes !== "manual") {
+        const rec = normalizeSimulateSizeResult(session.lastSimulateSize)?.reserve_meta?.recommended_schedule;
+        if (rec) {
+          session.simulate.reserveSchedule = normalizeScheduleMatrix(rec, defaultReserveHourly);
+        }
+      }
+      renderPage({ animate: false, preserveScroll: true });
     });
   });
+  document.querySelectorAll("[data-sched-open]").forEach((el) => {
+    el.addEventListener("click", () => {
+      const kind = el.dataset.schedOpen;
+      if (kind !== "tou" && kind !== "reserve") return;
+      readSimulateForm();
+      simScheduleModal = kind;
+      syncScheduleModalHost();
+    });
+  });
+  document.querySelectorAll("[data-sched-open-rec]").forEach((el) => {
+    el.addEventListener("click", () => {
+      simScheduleModal = "reserve-rec";
+      syncScheduleModalHost();
+    });
+  });
+  document.querySelectorAll("[data-reserve-apply-manual]").forEach((el) => {
+    el.addEventListener("click", () => {
+      const rec = normalizeSimulateSizeResult(session.lastSimulateSize)?.reserve_meta?.recommended_schedule;
+      if (!rec) return;
+      session.simulate.reserveScheduleMode = "manual";
+      session.simulate.reserveSchedule = normalizeScheduleMatrix(rec, defaultReserveHourly);
+      session.simulate.detailTab = "reserve";
+      persistSession();
+      renderPage({ animate: false, preserveScroll: true });
+    });
+  });
+  if (!simScheduleEscBound) {
+    simScheduleEscBound = true;
+    document.addEventListener("keydown", (ev) => {
+      if (ev.key === "Escape" && simScheduleModal) closeScheduleModal();
+    });
+  }
+  syncScheduleModalHost();
   document.querySelectorAll('[data-sim="largeUserRatio"]').forEach((el) => {
     el.addEventListener("change", () => {
       readSimulateForm();
@@ -4381,6 +4836,7 @@ function bindSimulate() {
       simDispatchChartCache = {};
       simDispatchChartLoadId += 1;
       session.lastSimulateSize = normalizeSimulateSizeResult(res);
+      // 自動推薦只留在結果區，不寫回功能區矩陣
       // 保留 /sample 完整 profile；勿用 /size 精簡結果覆寫（否則卡片依據會空掉）
       if (res) {
         const prevSample = session.lastSimulateSample;
@@ -4486,6 +4942,15 @@ function renderPage(options = {}) {
   const prevRoute = currentRoute;
   const nextRoute = parseRoute();
   const isRouteChange = prevRoute !== nextRoute;
+  if (isRouteChange && nextRoute !== ROUTES.SIMULATE) {
+    simScheduleModal = null;
+    const host = document.getElementById("simSchedModalHost");
+    if (host) host.innerHTML = "";
+    document.body.classList.remove("sim-sched-modal-open");
+  } else if (isRouteChange && nextRoute === ROUTES.SIMULATE) {
+    // 進入試算頁時確保 modal 掛在 body（不被 main overflow 裁切）
+    scheduleModalHostEl();
+  }
   const animate = options.animate ?? isRouteChange;
   const preserveScroll = options.preserveScroll ?? !isRouteChange;
   const scrollTop = preserveScroll ? main.scrollTop : 0;

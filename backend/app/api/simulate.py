@@ -38,6 +38,10 @@ def _prepare_simulate(
     sim_obj = parse_json_form(simulate, None)
     if not isinstance(sim_obj, dict):
         raise ValueError("simulate must be a JSON object")
+    if "reserve" in (sim_obj.get("functions") or []):
+        from app.services.features import reserve as reserve_feat
+
+        reserve_feat.validate_inputs(sim_obj)
     rates_obj = parse_json_form(rates, None)
     schedule_obj = parse_json_form(schedule, None)
     holidays_obj = parse_json_form(holidays, None)

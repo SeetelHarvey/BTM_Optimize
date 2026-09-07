@@ -1924,38 +1924,205 @@ a.btm-chip {
 }
 
 .sim-tab-panels {
-  display: grid;
-  min-height: 2rem;
-  padding: 0.15rem 0.1rem 0.25rem;
+  display: block;
+  min-height: 0;
+  padding: 0.35rem 0.1rem 0.15rem;
 }
 
-/* 疊同一格 → 高度跟最高面板；切換不塌縮 */
 .sim-tab-panel {
-  grid-area: 1 / 1;
   min-width: 0;
-  animation: simPanelIn 0.22s ease;
+  animation: simTabIn 0.22s ease;
 }
 
 .sim-tab-panel--hidden {
-  visibility: hidden;
-  pointer-events: none;
-  z-index: 0;
+  display: none;
 }
 
-.sim-tab-panel:not(.sim-tab-panel--hidden) {
-  visibility: visible;
-  z-index: 1;
-}
-
-@keyframes simPanelIn {
+@keyframes simTabIn {
   from { opacity: 0; transform: translateY(5px); }
   to { opacity: 1; transform: none; }
 }
 
-/* schedule */
+.sim-fn-card {
+  padding: 0.95rem 1.05rem 1.05rem;
+  border-radius: 10px;
+  border: 1px solid rgb(255 255 255 / 0.08);
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 0.035), transparent 42%),
+    rgb(0 0 0 / 0.2);
+  min-height: 8.5rem;
+}
+
+.sim-fn-card__lead {
+  margin: 0 0 0.85rem;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  color: rgb(255 255 255 / 0.62);
+  max-width: 48rem;
+}
+
+.sim-fn-card__body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.sim-fn-card__body > .btm-row,
+.sim-fn-card__body > .sim-schedule,
+.sim-fn-card__body > .sim-obl-preview,
+.sim-fn-card__body > .sim-check {
+  margin: 0;
+}
+
+.sim-report--detail > .btm-subhead:first-child {
+  margin-top: 0;
+}
+
+.sim-reserve-panel {
+  margin-top: 0.85rem;
+}
+
+.sim-reserve-panel__kpis {
+  margin: 0.35rem 0 0.65rem;
+}
+
+.sim-reserve-panel__formula {
+  margin: 0 0 0.85rem;
+}
+
+.sim-reserve-fold {
+  margin: 0 0 0.65rem;
+  border-radius: 10px;
+  border: 1px solid rgb(255 255 255 / 0.08);
+  background: rgb(0 0 0 / 0.18);
+}
+
+.sim-reserve-fold__summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.7rem 0.95rem;
+  cursor: pointer;
+  list-style: none;
+  font-size: 0.92rem;
+  font-weight: 600;
+  user-select: none;
+}
+
+.sim-reserve-fold__summary::-webkit-details-marker {
+  display: none;
+}
+
+.sim-reserve-fold__summary::before {
+  content: "";
+  width: 0.45rem;
+  height: 0.45rem;
+  margin-right: 0.15rem;
+  border-right: 2px solid rgb(255 255 255 / 0.55);
+  border-bottom: 2px solid rgb(255 255 255 / 0.55);
+  transform: rotate(-45deg);
+  transition: transform 0.15s ease;
+  flex-shrink: 0;
+}
+
+.sim-reserve-fold[open] > .sim-reserve-fold__summary::before {
+  transform: rotate(45deg);
+}
+
+.sim-reserve-fold__summary > span:first-of-type {
+  flex: 1;
+}
+
+.sim-reserve-fold__body {
+  padding: 0 0.85rem 0.9rem;
+  border-top: 1px solid rgb(255 255 255 / 0.06);
+}
+
+.sim-reserve-table-wrap {
+  overflow-x: auto;
+  margin-top: 0.7rem;
+}
+
+.sim-reserve-table {
+  width: max-content;
+  min-width: 100%;
+  border-collapse: collapse;
+  table-layout: auto;
+}
+
+.sim-reserve-table th,
+.sim-reserve-table td {
+  border: 1px solid rgb(255 255 255 / 0.08);
+  padding: 0.55rem 0.85rem;
+  height: auto;
+  font-size: 0.88rem;
+  white-space: nowrap;
+  text-align: right;
+  vertical-align: middle;
+}
+
+.sim-reserve-table th {
+  font-size: 0.8rem;
+  font-weight: 650;
+  color: var(--vf-text-muted);
+  background: rgb(255 255 255 / 0.04);
+  text-align: right;
+}
+
+.sim-reserve-table th:first-child,
+.sim-reserve-table td:first-child {
+  text-align: left;
+  width: auto;
+  min-width: 6.5rem;
+}
+
+.sim-reserve-table th:last-child,
+.sim-reserve-table td:last-child {
+  text-align: left;
+  min-width: 7rem;
+}
+
+.sim-reserve-panel__rec {
+  margin: 0.5rem 0 0;
+  padding: 0.9rem 1rem;
+  border-radius: 10px;
+  border: 1px solid rgb(var(--vf-accent-rgb) / 0.28);
+  background: rgb(var(--vf-accent-rgb) / 0.08);
+}
+
+.sim-reserve-panel__rec .btm-subhead {
+  margin-top: 0;
+}
+
+.sim-reserve-panel__warn {
+  margin: 0.35rem 0 0.55rem;
+  font-size: 0.84rem;
+  line-height: 1.45;
+  color: rgb(251 191 36 / 0.95);
+}
+
+.sim-reserve-panel__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.65rem;
+  margin-top: 0.55rem;
+}
+
+.sim-reserve-ok {
+  color: rgb(52 211 153 / 0.95);
+  font-weight: 600;
+}
+
+.sim-reserve-fail {
+  color: rgb(251 146 60 / 0.95);
+  font-weight: 600;
+}
+
+/* schedule — 面板內僅模式列；矩陣改彈窗，避免叠格撐高其他功能 */
 .sim-schedule {
   margin-top: 0.45rem;
-  padding: 0.95rem 1rem;
+  padding: 0.85rem 1rem;
   border-radius: 10px;
   border: 1px solid rgb(255 255 255 / 0.08);
   background:
@@ -1979,6 +2146,13 @@ a.btm-chip {
   min-width: 0;
 }
 
+.sim-schedule__actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.55rem 0.75rem;
+}
+
 .sim-schedule__badge {
   display: inline-flex;
   align-items: center;
@@ -1987,6 +2161,10 @@ a.btm-chip {
 .sim-schedule__badge .btm-chip {
   font-size: 0.72rem;
   padding: 0.2rem 0.55rem;
+}
+
+.sim-schedule__summary {
+  font-variant-numeric: tabular-nums;
 }
 
 .sim-schedule__title {
@@ -2001,10 +2179,23 @@ a.btm-chip {
 .sim-schedule__title .fa-solid { color: var(--vf-accent); font-size: 0.85rem; }
 
 .sim-schedule__hint {
-  margin: 0.5rem 0 0;
-  font-size: 0.76rem;
-  opacity: 0.5;
+  margin: 0.55rem 0 0;
+  font-size: 0.78rem;
   line-height: 1.4;
+  color: rgb(255 255 255 / 0.55);
+}
+
+.sim-schedule--compact {
+  padding-bottom: 0.75rem;
+}
+
+.sim-schedule__open {
+  white-space: nowrap;
+}
+
+.sim-schedule__open .fa-solid {
+  margin-right: 0.35rem;
+  opacity: 0.85;
 }
 
 .sim-schedule__switch {
@@ -2033,19 +2224,79 @@ a.btm-chip {
   box-shadow: 0 0 12px rgb(var(--vf-accent-rgb) / 0.18);
 }
 
-.sim-schedule__grid {
+body.sim-sched-modal-open {
   overflow: hidden;
-  max-height: 0;
-  opacity: 0;
-  margin-top: 0;
-  transition: max-height 0.35s ease, opacity 0.25s ease, margin-top 0.3s ease;
 }
 
-.sim-schedule__grid--open {
-  max-height: min(85vh, 1100px);
-  opacity: 1;
-  margin-top: 0.95rem;
+.sim-sched-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+}
+
+.sim-sched-modal__backdrop {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+  background: rgb(4 10 18 / 0.72);
+  backdrop-filter: blur(4px);
+}
+
+.sim-sched-modal__panel {
+  position: relative;
+  z-index: 1;
+  width: min(1120px, 100%);
+  max-height: min(92vh, 920px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: simModalIn 0.2s ease;
+}
+
+@keyframes simModalIn {
+  from { opacity: 0; transform: translateY(10px) scale(0.98); }
+  to { opacity: 1; transform: none; }
+}
+
+.sim-sched-modal__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem 1rem;
+  padding: 1rem 1.1rem 0.85rem;
+  border-bottom: 1px solid rgb(255 255 255 / 0.08);
+}
+
+.sim-sched-modal__title {
+  margin: 0 0 0.25rem;
+  font-size: 1.05rem;
+  font-weight: 650;
+}
+
+.sim-sched-modal__titles .btm-meta {
+  margin: 0;
+  max-width: 36rem;
+}
+
+.sim-sched-modal__head-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem 0.6rem;
+}
+
+.sim-sched-modal__body {
+  padding: 0.85rem 1.1rem 1.1rem;
   overflow: auto;
+  min-height: 0;
+  flex: 1;
 }
 
 /* 30 分／48 欄：固定欄寬 + 橫向捲動，避免被 width:100% 壓扁 */

@@ -8,6 +8,14 @@ def main() -> None:
     assert 0 <= sim["socMin"] < sim["socMax"] <= 1
     assert 0.5 <= sim["chargeEff"] <= 1
     assert "calendarDeg" not in sim
+    for key in (
+        "reserveCapacityPrice",
+        "reservePerformancePrice",
+        "reserveEnergyPrice",
+        "reserveMonthlyDispatchCount",
+    ):
+        assert key in sim
+        assert float(sim[key]) >= 0
     bundle = default_settings()
     assert "simulate" in bundle
     print("ok", sorted(sim.keys()))
