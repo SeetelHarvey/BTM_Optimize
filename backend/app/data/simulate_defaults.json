@@ -1,6 +1,9 @@
 {
   "simulateTou": "ThreeStage",
+  "sizingStrategies": ["p50", "p90", "max", "two_cycle"],
+  "sizingEnergySeeds": ["min", "p50", "p90", "max"],
   "autoAdjustOffPeakContract": false,
+  "evaluateContractReduction": false,
   "demandBufferKw": 10,
   "antiExportKw": 10,
   "backupReserveKwh": 0,
@@ -14,5 +17,6 @@
   "largeUserPowerRatio": 0.8,
   "socMin": 0.1,
   "socMax": 0.9,
-  "chargeEff": 0.85
+  "chargeEff": 0.85,
+  "includeHalfPeak": false
 }

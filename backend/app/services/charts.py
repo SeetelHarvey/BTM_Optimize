@@ -1,8 +1,9 @@
-"""需量圖聚合：熱力／箱型／折線。"""
+"""需量圖聚合：熱力／箱型／折線（pandas／numpy 聚合）。"""
 
 from datetime import date, datetime
 from typing import Any
 
+import numpy as np
 import pandas as pd
 
 from app.services.schedule import DATA_INTERVAL_MINUTES, ROWS_PER_DAY
@@ -29,21 +30,61 @@ def _day_kind(d: date, is_holiday: bool) -> str:
     return "saturday"
 
 
+def _day_kind_array(dates: pd.Series, is_holiday: pd.Series | None) -> np.ndarray:
+    """向量化日別。"""
+    ts = pd.to_datetime(dates)
+    wd = ts.dt.weekday.to_numpy()
+    if is_holiday is None:
+        hol = np.zeros(len(ts), dtype=bool)
+    else:
+        hol = is_holiday.fillna(False).astype(bool).to_numpy()
+    hol = hol | (wd == 6)
+    out = np.full(len(ts), "saturday", dtype=object)
+    out[hol] = "holiday"
+    out[(~hol) & (wd < 5)] = "weekday"
+    return out
+
+
+def _date_col(series: pd.Series) -> pd.Series:
+    """統一成 date（向量化）。"""
+    ts = pd.to_datetime(series)
+    return ts.dt.date
+
+
+def _prepare_work(df: pd.DataFrame) -> pd.DataFrame:
+    """共用 date／hour／day_kind 欄。"""
+    work = df.copy()
+    work["_d"] = _date_col(work["date"])
+    if "hour" in work.columns:
+        work["_hour"] = work["hour"].astype(int)
+    else:
+        work["_hour"] = work["min"].astype(int) // 4
+    hol = work["is_holiday"] if "is_holiday" in work.columns else None
+    work["_kind"] = _day_kind_array(work["date"], hol)
+    return work
+
+
 def _five(s: pd.Series) -> dict[str, Any] | None:
     """Tukey：鬚＝fence 內 min/max；其餘為離群。"""
     if s.empty:
         return None
-    vals = s.astype(float)
-    q = vals.quantile([0.25, 0.5, 0.75])
-    q1, med, q3 = float(q.loc[0.25]), float(q.loc[0.5]), float(q.loc[0.75])
+    return _five_np(s.astype(float).to_numpy())
+
+
+def _five_np(vals: np.ndarray) -> dict[str, Any] | None:
+    """Tukey（numpy）。"""
+    if vals.size == 0:
+        return None
+    q1, med, q3 = np.quantile(vals, [0.25, 0.5, 0.75])
+    q1, med, q3 = float(q1), float(med), float(q3)
     iqr = q3 - q1
     lo_f, hi_f = q1 - 1.5 * iqr, q3 + 1.5 * iqr
     inside = vals[(vals >= lo_f) & (vals <= hi_f)]
-    wlo = float(inside.min()) if len(inside) else float(vals.min())
-    whi = float(inside.max()) if len(inside) else float(vals.max())
+    wlo = float(inside.min()) if inside.size else float(vals.min())
+    whi = float(inside.max()) if inside.size else float(vals.max())
     outs = vals[(vals < wlo) | (vals > whi)]
     return {
-        "n": int(len(vals)),
+        "n": int(vals.size),
         "min": float(vals.min()),
         "q1": q1,
         "median": med,
@@ -51,39 +92,78 @@ def _five(s: pd.Series) -> dict[str, Any] | None:
         "max": float(vals.max()),
         "whisker_low": wlo,
         "whisker_high": whi,
-        "outliers": [round(float(x), 3) for x in outs.to_numpy()],
+        "outliers": [round(float(x), 3) for x in outs],
     }
 
 
 def _heatmap(df: pd.DataFrame) -> dict[str, Any]:
     if df.empty:
-        return {"dates": [], "values": []}
+        return {"dates": [], "values": [], "date_meta": {}}
     work = df.copy()
-    work["_d"] = work["date"].map(_as_date)
-    dates = sorted(work["_d"].unique())
+    work["_d"] = _date_col(work["date"])
+    work["_min"] = work["min"].astype(int)
+    work["_kw"] = work["kW"].astype(float)
+    piv = work.pivot_table(index="_d", columns="_min", values="_kw", aggfunc="last")
+    piv = piv.reindex(columns=list(range(ROWS_PER_DAY)))
+    dates = sorted(piv.index)
+    piv = piv.reindex(dates)
+    raw = piv.to_numpy()
     values: list[list[float | None]] = []
+    for row in raw:
+        values.append(
+            [
+                None
+                if (v is None or (isinstance(v, float) and np.isnan(v)))
+                else round(float(v), 3)
+                for v in row
+            ]
+        )
+
+    firsts = work.sort_values("_min").groupby("_d", sort=True).first()
+    date_meta: dict[str, dict[str, str]] = {}
     for d in dates:
-        row: list[float | None] = [None] * ROWS_PER_DAY
-        part = work.loc[work["_d"] == d, ["min", "kW"]]
-        for slot, kw in zip(part["min"].to_numpy(), part["kW"].to_numpy()):
-            i = int(slot)
-            if 0 <= i < ROWS_PER_DAY:
-                row[i] = round(float(kw), 3)
-        values.append(row)
-    return {"dates": [d.isoformat() for d in dates], "values": values}
+        sea = "all"
+        hol = False
+        if d in firsts.index:
+            if "season" in firsts.columns:
+                sea = str(firsts.loc[d, "season"])
+            if "is_holiday" in firsts.columns:
+                hol = bool(firsts.loc[d, "is_holiday"])
+        date_meta[d.isoformat()] = {
+            "season": sea,
+            "day_kind": _day_kind(d, hol),
+            "month": f"{d.year:04d}-{d.month:02d}",
+        }
+    return {
+        "dates": [d.isoformat() for d in dates],
+        "values": values,
+        "date_meta": date_meta,
+    }
 
 
 def _line(df: pd.DataFrame) -> dict[str, Any]:
     if df.empty:
         return {"dates": [], "peak_kw": [], "mean_kw": []}
     work = df.copy()
-    work["_d"] = work["date"].map(_as_date)
+    work["_d"] = _date_col(work["date"])
     g = work.groupby("_d", sort=True)["kW"]
     return {
         "dates": [d.isoformat() for d in g.mean().index],
         "peak_kw": [round(float(x), 3) for x in g.max().to_numpy()],
         "mean_kw": [round(float(x), 3) for x in g.mean().to_numpy()],
     }
+
+
+def _boxplot_bucket(part: pd.DataFrame) -> dict[str, Any]:
+    """單一季×日別：一次 groupby 小時。"""
+    bucket: dict[str, Any] = {}
+    if part.empty:
+        return bucket
+    for h, s in part.groupby("_hour", sort=True)["kW"]:
+        stats = _five(s)
+        if stats:
+            bucket[str(int(h))] = stats
+    return bucket
 
 
 def _boxplot(df: pd.DataFrame) -> dict[str, Any]:
@@ -94,25 +174,12 @@ def _boxplot(df: pd.DataFrame) -> dict[str, Any]:
     if df.empty:
         return {"hours": hours, "groups": groups}
 
-    work = df.copy()
-    work["_d"] = work["date"].map(_as_date)
-    if "hour" in work.columns:
-        work["_hour"] = work["hour"].astype(int)
-    else:
-        work["_hour"] = work["min"].astype(int) // 4
-    work["_kind"] = [
-        _day_kind(d, bool(h)) for d, h in zip(work["_d"], work["is_holiday"])
-    ]
+    work = _prepare_work(df)
     for sea in _SEASONS:
         part_s = work if sea == "all" else work[work["season"] == sea]
         for day in _DAYS:
             part = part_s if day == "all" else part_s[part_s["_kind"] == day]
-            bucket: dict[str, Any] = {}
-            for h in hours:
-                stats = _five(part.loc[part["_hour"] == h, "kW"])
-                if stats:
-                    bucket[str(h)] = stats
-            groups[sea][day] = bucket
+            groups[sea][day] = _boxplot_bucket(part)
     return {"hours": hours, "groups": groups}
 
 
@@ -165,26 +232,18 @@ def _hourly_mean(df: pd.DataFrame, col: str) -> dict[str, Any]:
     if df.empty or col not in df.columns:
         return {"hours": hours, "groups": groups}
 
-    work = df.copy()
-    work["_d"] = work["date"].map(_as_date)
-    if "hour" in work.columns:
-        work["_hour"] = work["hour"].astype(int)
-    else:
-        work["_hour"] = work["min"].astype(int) // 4
-    work["_kind"] = [
-        _day_kind(d, bool(h)) for d, h in zip(work["_d"], work["is_holiday"])
-    ]
+    work = _prepare_work(df)
     for sea in _SEASONS:
         part_s = work if sea == "all" else work[work["season"] == sea]
         for day in _DAYS:
             part = part_s if day == "all" else part_s[part_s["_kind"] == day]
-            bucket: dict[str, float] = {}
-            for h in hours:
-                vals = part.loc[part["_hour"] == h, col].astype(float)
-                if vals.empty:
-                    continue
-                bucket[str(h)] = round(float(vals.mean()), 3)
-            groups[sea][day] = bucket
+            if part.empty:
+                groups[sea][day] = {}
+                continue
+            means = part.groupby("_hour", sort=True)[col].mean()
+            groups[sea][day] = {
+                str(int(h)): round(float(v), 3) for h, v in means.items()
+            }
     return {"hours": hours, "groups": groups}
 
 

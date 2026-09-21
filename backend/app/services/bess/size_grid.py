@@ -1,6 +1,5 @@
 """量體：負載樣本統計、配置組合、推薦。"""
 
-import math
 from typing import Any
 
 import pandas as pd
@@ -9,34 +8,284 @@ from app.services.billing.demand import bill_mode
 from app.services.billing.overage import overage_ceiling
 from app.services.contracts import ContractCapacity
 from app.services.cleaning.formats.tpc import enrich_interval_end
-from app.services import settings as settings_svc
 from app.services.schedule import (
-    build_context,
     default_intraday_off_peak_hours,
-    hours_per_data_row,
     intraday_off_peak_hours,
-    tou_slot_minutes,
 )
 
 
-def peak_hours_max(tou_type: str, schedule: dict | None = None) -> int:
-    """試算方案單日尖峰時段上限（小時，至少 1）。"""
-    sched = schedule if schedule is not None else settings_svc.default_schedule()
-    ctx = build_context(tou_type, schedule=sched)
-    slot_h = tou_slot_minutes(sched, tou_type) / 60.0
-    best = 0
-    for sea in ("summer", "non_summer"):
-        mat = ctx["matrix"][sea]
-        for wd in range(mat.shape[0]):
-            n = int((mat[wd] == "peak").sum())
-            best = max(best, n)
-    hours = max(1, int(round(best * slot_h)))
-    if best * slot_h > hours and best * slot_h > hours + 1e-9:
-        hours = max(1, math.ceil(best * slot_h))
-    return hours
+ENERGY_SEED_KEYS = ("min", "p50", "p90", "max")
+ENERGY_SEED_SET = frozenset(ENERGY_SEED_KEYS)
+
+# 功率面向：整體分位（與電量一致，非月均再跨月）
+SIZING_TIER_P50 = "p50"
+SIZING_TIER_P90 = "p90"
+SIZING_TIER_MAX = "max"
+SIZING_TIER_TWO_CYCLE = "two_cycle"
+SIZING_TIER_KEYS = (
+    SIZING_TIER_P50,
+    SIZING_TIER_P90,
+    SIZING_TIER_MAX,
+    SIZING_TIER_TWO_CYCLE,
+)
+SIZING_TIER_SET = frozenset(SIZING_TIER_KEYS)
+
+# 舊 session／請求相容
+_LEGACY_P95 = "p95"
 
 
-GRID_HOURS_MIN = 2
+def _alias_seed_id(raw: str) -> str:
+    k = str(raw or "").strip().lower()
+    return SIZING_TIER_P90 if k == _LEGACY_P95 else k
+
+
+def normalize_sizing_strategies(raw: Any) -> list[str]:
+    """正規化功率面向多選；顯式空陣列保留為空。"""
+    if isinstance(raw, str):
+        raw = [raw.strip().lower()]
+    if raw is None:
+        return list(SIZING_TIER_KEYS)
+    if not isinstance(raw, (list, tuple, set)):
+        return list(SIZING_TIER_KEYS)
+    out: list[str] = []
+    seen: set[str] = set()
+    for item in raw:
+        k = _alias_seed_id(item)
+        if k in SIZING_TIER_SET and k not in seen:
+            seen.add(k)
+            out.append(k)
+    return out
+
+
+def normalize_energy_seeds(raw: Any) -> list[str]:
+    """電量面向勾選；None＝全開，[]＝全關。"""
+    if raw is None:
+        return list(ENERGY_SEED_KEYS)
+    if isinstance(raw, str):
+        raw = [raw]
+    if not isinstance(raw, (list, tuple, set)):
+        return list(ENERGY_SEED_KEYS)
+    out: list[str] = []
+    seen: set[str] = set()
+    for item in raw:
+        k = _alias_seed_id(item)
+        if k in ENERGY_SEED_SET and k not in seen:
+            seen.add(k)
+            out.append(k)
+    return out
+
+
+def _kwh_by_period(work: pd.DataFrame) -> dict[str, float]:
+    """各 period 總 kWh（15 分列）。"""
+    from app.services.schedule import hours_per_data_row
+
+    if work.empty or "period" not in work.columns or "kW" not in work.columns:
+        return {}
+    dt = hours_per_data_row()
+    g = work.assign(_kwh=work["kW"].astype(float) * dt).groupby(work["period"].astype(str))["_kwh"].sum()
+    return {str(k): float(v) for k, v in g.items()}
+
+
+def _coerce_include_half_peak(raw: Any) -> bool:
+    """是否納入半尖峰；未指定或無法解析時預設關閉（僅手動開啟）。"""
+    if isinstance(raw, bool):
+        return raw
+    if raw is None or (isinstance(raw, str) and not str(raw).strip()):
+        return False
+    if isinstance(raw, (int, float)):
+        return float(raw) != 0.0
+    s = str(raw).strip().lower()
+    if s in ("1", "true", "yes", "on"):
+        return True
+    if s in ("0", "false", "no", "off"):
+        return False
+    return False
+
+
+def _target_load_periods(include_half_peak: bool) -> frozenset[str]:
+    """PCS 取樣目標時段：尖峰，可選加半尖峰（不含週六半尖峰／離峰）。"""
+    if include_half_peak:
+        return frozenset({"peak", "half_peak"})
+    return frozenset({"peak"})
+
+
+def _midday_off_peak_hours(tou_type: str, schedule: dict | None) -> frozenset[int]:
+    """日中離峰整點（8–15）；批次僅早晚離峰時為空 → 兩充兩放不可用。"""
+    raw = (
+        default_intraday_off_peak_hours(tou_type)
+        if schedule is None
+        else intraday_off_peak_hours(tou_type, schedule)
+    )
+    return frozenset(h for h in raw if 8 <= int(h) < 16)
+
+
+def diagnose_sizing(
+    df: pd.DataFrame,
+    tou_type: str = "ThreeStage",
+    *,
+    prices: dict | None = None,
+    charge_eff: float = 0.85,
+    contracts: ContractCapacity | dict[str, Any] | None = None,
+    buffer_kw: float = 0.0,
+    schedule: dict | None = None,
+    include_half_peak: bool | None = None,
+) -> dict[str, Any]:
+    """診斷：走 profile_stats → _diagnosis_from_profile（與 sample 同一路徑）。"""
+    if df is None or df.empty or "period" not in df.columns:
+        return {
+            "ok": False,
+            "reason": "missing period",
+            "suggested_strategies": list(SIZING_TIER_KEYS),
+            "available_strategies": [],
+            "peak_kwh_share": 0.0,
+            "half_peak_kwh_share": 0.0,
+            "include_half_peak": False,
+        }
+    if contracts is None:
+        return {
+            "ok": False,
+            "reason": "missing contracts",
+            "suggested_strategies": list(SIZING_TIER_KEYS),
+            "available_strategies": [],
+            "peak_kwh_share": 0.0,
+            "half_peak_kwh_share": 0.0,
+            "include_half_peak": False,
+        }
+    stats = profile_stats(
+        df,
+        contracts,
+        tou_type,
+        buffer_kw=buffer_kw,
+        schedule=schedule,
+        strategies=list(SIZING_TIER_KEYS),
+        prices=prices,
+        charge_eff=charge_eff,
+        include_half_peak=include_half_peak,
+        soc_min=0.1,
+        soc_max=0.9,
+    )
+    return _diagnosis_from_profile(
+        df,
+        tou_type,
+        stats,
+        include_half_peak=include_half_peak,
+        schedule=schedule,
+    )
+
+
+def _diagnosis_from_profile(
+    df: pd.DataFrame,
+    tou_type: str,
+    stats: dict[str, Any],
+    *,
+    include_half_peak: bool | None = None,
+    schedule: dict | None = None,
+) -> dict[str, Any]:
+    """由已算好的 profile_stats 組診斷（避免 sample 再重算離峰裕度）。"""
+    if not stats.get("ok"):
+        return {
+            "ok": False,
+            "reason": stats.get("reason") or "profile",
+            "suggested_strategies": list(SIZING_TIER_KEYS),
+            "available_strategies": [],
+            "peak_kwh_share": 0.0,
+            "half_peak_kwh_share": 0.0,
+            "include_half_peak": False,
+        }
+    by_p = _kwh_by_period(df)
+    total = sum(by_p.values()) or 1.0
+    peak = float(by_p.get("peak") or 0.0)
+    half = float(by_p.get("half_peak") or 0.0)
+    half_share = half / total * 100.0
+    use_half = _coerce_include_half_peak(
+        include_half_peak if include_half_peak is not None else stats.get("include_half_peak"),
+    )
+    dual = stats.get("by_half_peak") or {}
+    branch = dual.get("true" if use_half else "false") or {}
+    pcs = branch.get("pcs_sample") or stats.get("pcs_sample") or {}
+    target_periods = _target_load_periods(use_half)
+    target_kwh = sum(float(by_p.get(p) or 0.0) for p in target_periods)
+    mid_h = _midday_off_peak_hours(tou_type, schedule)
+
+    available: list[dict[str, Any]] = []
+    for tid in SIZING_TIER_KEYS:
+        kw = float(pcs.get(tid) or 0)
+        reason = ""
+        if kw <= 0:
+            if tid == SIZING_TIER_TWO_CYCLE:
+                reason = "no_midday_off_peak" if not mid_h else "no_two_cycle_margin"
+            elif tid == SIZING_TIER_MAX:
+                reason = "no_load"
+            else:
+                reason = "no_target_or_off_margin"
+        available.append({
+            "id": tid,
+            "ok": kw > 0,
+            "pcs_kw": round(kw, 3) if kw > 0 else 0.0,
+            "reason": reason,
+        })
+    suggested = [a["id"] for a in available if a["ok"]]
+    return {
+        "ok": True,
+        "suggested_strategies": suggested or list(SIZING_TIER_KEYS),
+        "available_strategies": available,
+        "include_half_peak": use_half,
+        "target_periods": sorted(target_periods),
+        "peak_kwh": round(peak, 1),
+        "half_peak_kwh": round(half, 1),
+        "target_kwh": round(target_kwh, 1),
+        "total_kwh": round(total, 1),
+        "peak_kwh_share": round(peak / total * 100.0, 1),
+        "half_peak_kwh_share": round(half_share, 1),
+        "target_kwh_share": round(target_kwh / total * 100.0, 1),
+    }
+
+
+def _target_kw_series(
+    work: pd.DataFrame,
+    *,
+    include_half_peak: bool = False,
+) -> pd.Series:
+    """目標時段需量列（非假日平日）。"""
+    if work.empty or "period" not in work.columns or "kW" not in work.columns:
+        return pd.Series(dtype=float)
+    periods = _target_load_periods(include_half_peak)
+    rows = work.loc[work["period"].astype(str).isin(periods)]
+    rows = rows.loc[_weekday_mask(rows)]
+    if rows.empty:
+        return pd.Series(dtype=float)
+    return rows["kW"].astype(float)
+
+
+def _power_pcs_quantiles(
+    work: pd.DataFrame,
+    cap: ContractCapacity,
+    tou_type: str,
+    buffer_kw: float,
+    *,
+    include_half_peak: bool = False,
+) -> tuple[dict[str, float], dict[str, Any]]:
+    """功率面向 P50／P90：整體 15 分 kW 分位 ∩ 同口徑離峰裕度分位（非月均）。"""
+    kw = _target_kw_series(work, include_half_peak=include_half_peak)
+    head = _off_headroom_series(work, cap, tou_type, buffer_kw)
+    empty_src = {"kw": {}, "off_headroom": {}, "periods": sorted(_target_load_periods(include_half_peak))}
+    if kw.empty or head.empty:
+        return {SIZING_TIER_P50: 0.0, SIZING_TIER_P90: 0.0}, empty_src
+    qmap = {SIZING_TIER_P50: 0.50, SIZING_TIER_P90: 0.90}
+    pcs: dict[str, float] = {}
+    kw_out: dict[str, float] = {}
+    off_out: dict[str, float] = {}
+    for tid, q in qmap.items():
+        a = float(kw.quantile(q))
+        b = float(head.quantile(q))
+        kw_out[tid] = round(a, 3)
+        off_out[tid] = round(b, 3)
+        pcs[tid] = round(min(a, b), 3) if a > 0 and b > 0 else 0.0
+    return pcs, {
+        "kw": kw_out,
+        "off_headroom": off_out,
+        "periods": sorted(_target_load_periods(include_half_peak)),
+    }
 
 
 def _peak_kw_series(df: pd.DataFrame) -> pd.Series:
@@ -46,20 +295,20 @@ def _peak_kw_series(df: pd.DataFrame) -> pd.Series:
     return df.loc[df["period"] == "peak", "kW"].astype(float)
 
 
-def peak_ess_util_pct(df: pd.DataFrame, pcs_kw: float) -> float | None:
+def peak_ess_util_pct(df: pd.DataFrame, pcs_kw: float, peak: pd.Series | None = None) -> float | None:
     """尖峰儲能使用率：mean(min(需量÷PCS, 1))×100%，上限 100%。"""
-    peak = _peak_kw_series(df)
-    if pcs_kw <= 0 or peak.empty:
+    series = _peak_kw_series(df) if peak is None else peak
+    if pcs_kw <= 0 or series.empty:
         return None
-    return round(float((peak / pcs_kw).clip(upper=1.0).mean() * 100.0), 1)
+    return round(float((series / pcs_kw).clip(upper=1.0).mean() * 100.0), 1)
 
 
-def peak_coverage_pct(df: pd.DataFrame, pcs_kw: float) -> float | None:
+def peak_coverage_pct(df: pd.DataFrame, pcs_kw: float, peak: pd.Series | None = None) -> float | None:
     """尖峰負載覆蓋率：mean(min(PCS÷需量, 1))×100%，上限 100%。"""
-    peak = _peak_kw_series(df)
-    if pcs_kw <= 0 or peak.empty:
+    series = _peak_kw_series(df) if peak is None else peak
+    if pcs_kw <= 0 or series.empty:
         return None
-    safe = peak.clip(lower=1e-9)
+    safe = series.clip(lower=1e-9)
     return round(float((pcs_kw / safe).clip(upper=1.0).mean() * 100.0), 1)
 
 
@@ -68,40 +317,17 @@ def _tier_pct_map(
     pcs_sample: dict[str, float],
     fn,
 ) -> dict[str, float]:
-    """各 PCS 檔位套用利用率／覆蓋率。"""
+    """各 PCS 檔位套用利用率／覆蓋率（尖峰序列只取一次）。"""
+    peak = _peak_kw_series(df)
     out: dict[str, float] = {}
     for tier, raw in pcs_sample.items():
         pcs = float(raw or 0)
         if pcs <= 0:
             continue
-        pct = fn(df, pcs)
+        pct = fn(df, pcs, peak)
         if pct is not None:
             out[str(tier)] = pct
     return out
-
-
-def combination_grid(
-    pcs_list: list[float],
-    peak_h: int,
-    *,
-    pcs_hours: dict[float, int] | None = None,
-    pcs_hours_min: dict[float, int] | None = None,
-    min_h: int = GRID_HOURS_MIN,
-) -> list[tuple[float, float]]:
-    """pcs × min_h..peak_h 小時；可逐 pcs 指定上下限。"""
-    default_h = max(min_h, int(peak_h))
-    grid: list[tuple[float, float]] = []
-    seen: set[tuple[float, float]] = set()
-    for pcs in pcs_list:
-        key_pcs = round(pcs, 3)
-        h_lo = max(1, int((pcs_hours_min or {}).get(key_pcs, min_h)))
-        h_cap = max(h_lo, int((pcs_hours or {}).get(key_pcs, default_h)))
-        for h in range(h_lo, h_cap + 1):
-            key = (round(pcs, 3), round(pcs * h, 3))
-            if key not in seen:
-                seen.add(key)
-                grid.append(key)
-    return grid
 
 
 def _monthly_avg(values: pd.Series, months: pd.Series) -> list[float]:
@@ -129,6 +355,91 @@ def _min_tier(*tiers: dict[str, float]) -> dict[str, float]:
     return out
 
 
+def _weekday_mask(rows: pd.DataFrame) -> pd.Series:
+    """非假日平日（以區間 date 為準）。"""
+    mask = pd.Series(True, index=rows.index)
+    if "is_holiday" in rows.columns:
+        mask &= ~rows["is_holiday"].fillna(False).astype(bool)
+    if "date" in rows.columns:
+        mask &= pd.to_datetime(rows["date"]).dt.weekday < 5
+    elif "timestamp" in rows.columns:
+        from app.services.cleaning.formats.tpc import date_from_ts
+
+        mask &= date_from_ts(rows["timestamp"]).dt.weekday < 5
+    return mask
+
+
+def _off_headroom_series(
+    work: pd.DataFrame,
+    cap: ContractCapacity,
+    tou_type: str,
+    buffer_kw: float,
+    *,
+    season: str | None = None,
+    hours: frozenset[int] | None = None,
+) -> pd.Series:
+    """逐列離峰可充裕度 kW（≥0）。"""
+    off = work.loc[work["period"] == "off_peak"]
+    if season is not None and "season" in off.columns:
+        off = off.loc[off["season"] == season]
+    if hours is not None and "hour" in off.columns:
+        off = off.loc[off["hour"].isin(hours)]
+    if off.empty:
+        return pd.Series(dtype=float)
+    months = pd.to_datetime(off["date"]).dt.strftime("%Y-%m")
+    kw = off["kW"].astype(float)
+    buf = float(buffer_kw)
+    out = pd.Series(0.0, index=off.index, dtype=float)
+    for month, idx in months.groupby(months, sort=True).groups.items():
+        ceiling = overage_ceiling(
+            "off_peak",
+            cap,
+            tou_type,
+            bill_mode(str(month)),
+        )
+        out.loc[idx] = (float(ceiling) - kw.loc[idx] - buf).clip(lower=0.0)
+    return out
+
+
+def _daily_off_headroom_kw(
+    work: pd.DataFrame,
+    cap: ContractCapacity,
+    tou_type: str,
+    buffer_kw: float,
+    *,
+    season: str | None = None,
+    hours: frozenset[int] | None = None,
+) -> pd.Series:
+    """每日離峰平均可充功率（同日）。"""
+    head = _off_headroom_series(
+        work, cap, tou_type, buffer_kw, season=season, hours=hours
+    )
+    if head.empty:
+        return pd.Series(dtype=float)
+    dates = pd.to_datetime(work.loc[head.index, "date"]).dt.normalize()
+    return head.groupby(dates).mean()
+
+
+def _off_margin_daily_stats(
+    work: pd.DataFrame,
+    cap: ContractCapacity,
+    tou_type: str,
+    buffer_kw: float,
+    *,
+    season: str | None = None,
+    hours: frozenset[int] | None = None,
+) -> dict[str, float]:
+    """同日離峰裕度 → 月均 → 跨月 max/avg/min。"""
+    daily = _daily_off_headroom_kw(
+        work, cap, tou_type, buffer_kw, season=season, hours=hours
+    )
+    if daily.empty:
+        return {"max": 0.0, "avg": 0.0, "min": 0.0}
+    months = pd.Series(daily.index).dt.strftime("%Y-%m")
+    months.index = daily.index
+    return _tier_stats(_monthly_avg(daily, months))
+
+
 def _two_cycle_sources(
     work: pd.DataFrame,
     months: pd.Series,
@@ -137,23 +448,18 @@ def _two_cycle_sources(
     buffer_kw: float,
     schedule: dict | None,
 ) -> tuple[dict[str, dict[str, float]], float]:
-    """兩充兩放來源統計與 PCS（非夏半尖峰 ∩ 離峰裕度，取跨月平均檔）。"""
-    mid_h = (
-        default_intraday_off_peak_hours(tou_type)
-        if schedule is None
-        else intraday_off_peak_hours(tou_type, schedule)
-    )
+    """兩充兩放：非夏半尖峰 ∩ 日中離峰同日裕度，取跨月平均檔。"""
+    mid_h = _midday_off_peak_hours(tou_type, schedule)
+    if not mid_h:
+        empty = {"max": 0.0, "avg": 0.0, "min": 0.0}
+        return {"half_peak": empty, "mid_off_margin": empty}, 0.0
     ns_hp = _period_monthly_stats(work, months, "half_peak", season="non_summer")
-    ns_off_all = _off_margin_monthly(
-        work, cap, tou_type, buffer_kw, season="non_summer"
-    )
-    ns_off_mid = _off_margin_monthly(
+    ns_off_mid = _off_margin_daily_stats(
         work, cap, tou_type, buffer_kw, season="non_summer", hours=mid_h
     )
-    pcs = _min_tier(ns_hp, ns_off_all, ns_off_mid)["avg"]
+    pcs = _min_tier(ns_hp, ns_off_mid)["avg"]
     return {
         "half_peak": ns_hp,
-        "off_margin": ns_off_all,
         "mid_off_margin": ns_off_mid,
     }, pcs
 
@@ -171,53 +477,154 @@ def _period_monthly_stats(
     return _tier_stats(_monthly_avg(rows["kW"], months.loc[rows.index]))
 
 
-def _off_margin_monthly(
+def _max_cover_pcs(
     work: pd.DataFrame,
     cap: ContractCapacity,
     tou_type: str,
     buffer_kw: float,
     *,
-    season: str | None = None,
-    hours: frozenset[int] | None = None,
-) -> dict[str, float]:
-    off = work.loc[work["period"] == "off_peak"]
-    if season is not None and "season" in off.columns:
-        off = off.loc[off["season"] == season]
-    if hours is not None and "hour" in off.columns:
-        off = off.loc[off["hour"].isin(hours)]
-    margin_monthly: list[float] = []
-    if len(off):
-        off = off.copy()
-        off["_month"] = pd.to_datetime(off["date"]).dt.strftime("%Y-%m")
-        for month, grp in off.groupby("_month", sort=True):
-            vals: list[float] = []
-            for _, row in grp.iterrows():
-                ceiling = overage_ceiling(
-                    "off_peak",
-                    cap,
-                    tou_type,
-                    bill_mode(str(month)),
-                )
-                vals.append(max(0.0, ceiling - float(row["kW"]) - float(buffer_kw)))
-            if vals:
-                margin_monthly.append(float(sum(vals) / len(vals)))
-    return _tier_stats(margin_monthly)
-
-
-def _full_cover_pcs(work: pd.DataFrame) -> tuple[float, dict[str, float]]:
-    """全覆蓋 PCS：尖峰時段最大需量；電池小時仍走 2～尖峰時長。"""
-    peak_rows = work.loc[work["period"] == "peak"]
-    if peak_rows.empty:
+    include_half_peak: bool = False,
+) -> tuple[float, dict[str, float]]:
+    """全覆蓋 PCS：目標時段最大需量，受該日離峰可充功率限制。"""
+    if work.empty or "kW" not in work.columns or "period" not in work.columns:
         return 0.0, {}
+    periods = _target_load_periods(include_half_peak)
+    rows = work.loc[work["period"].astype(str).isin(periods)]
+    if rows.empty:
+        return 0.0, {}
+    kw = rows["kW"].astype(float)
+    idx = kw.idxmax()
+    max_kw = float(kw.loc[idx])
+    if not (max_kw > 0):
+        return 0.0, {}
+    day = pd.Timestamp(work.loc[idx, "date"]).normalize()
+    daily_off = _daily_off_headroom_kw(work, cap, tou_type, buffer_kw)
+    day_off = float(daily_off.get(day, 0.0)) if len(daily_off) else 0.0
+    pcs = min(max_kw, day_off) if day_off > 0 else 0.0
+    src = {
+        "max_kw": round(max_kw, 3),
+        "day_off_headroom_kw": round(day_off, 3),
+        "pcs_kw": round(pcs, 3) if pcs > 0 else 0.0,
+        "periods": sorted(periods),
+    }
+    if not (pcs > 0):
+        src["reason"] = "off_peak_shortfall"
+        return 0.0, src
+    return round(pcs, 3), src
+
+
+def _energy_shift_seeds(
+    work: pd.DataFrame,
+    cap: ContractCapacity,
+    tou_type: str,
+    buffer_kw: float,
+    *,
+    soc_min: float,
+    soc_max: float,
+    charge_eff: float,
+) -> dict[str, Any]:
+    """能量種子 Min／P50／P90／Max：僅尖峰日電量 → batt／PCS（同日回充）。
+
+    半尖峰開關只影響功率種子；此處固定 peak，避免電池被半尖峰電量灌大。
+    Min＝尖峰日電量最小值（最輕尖峰日）。
+    """
+    from app.services.schedule import hours_per_data_row
+
     dt = hours_per_data_row()
-    peak_kw = peak_rows["kW"].astype(float)
-    pcs = float(peak_kw.max())
-    daily_kwh = (peak_kw * dt).groupby(peak_rows["date"]).sum()
-    max_day_kwh = float(daily_kwh.max()) if len(daily_kwh) else 0.0
-    return round(pcs, 3), {
-        "max_peak_kw": round(pcs, 3),
-        "max_day_peak_kwh": round(max_day_kwh, 1),
-        "pcs_kw": round(pcs, 3),
+    eta = max(1e-9, float(charge_eff))
+    window = max(1e-9, float(soc_max) - float(soc_min))
+    periods = _target_load_periods(False)  # 固定僅尖峰
+    empty: dict[str, Any] = {
+        "ok": False,
+        "seeds": {},
+        "daily_target_kwh": {},
+        "reason": "no_data",
+    }
+    if work.empty or "period" not in work.columns or "date" not in work.columns:
+        return empty
+
+    rows = work.loc[work["period"].astype(str).isin(periods)]
+    rows = rows.loc[_weekday_mask(rows)]
+    if rows.empty:
+        return {**empty, "reason": "no_target_rows"}
+
+    dates = pd.to_datetime(rows["date"]).dt.normalize()
+    daily_kwh = (rows["kW"].astype(float) * dt).groupby(dates).sum()
+    if daily_kwh.empty:
+        return {**empty, "reason": "no_daily_energy"}
+
+    levels = {
+        "min": float(daily_kwh.min()),
+        "p50": float(daily_kwh.quantile(0.50)),
+        "p90": float(daily_kwh.quantile(0.90)),
+        "max": float(daily_kwh.max()),
+    }
+    target_kw = rows["kW"].astype(float)
+    kw_pct = {
+        "min": float(target_kw.min()),
+        "p50": float(target_kw.quantile(0.50)),
+        "p90": float(target_kw.quantile(0.90)),
+        "max": float(target_kw.max()),
+    }
+    head_rows = _off_headroom_series(work, cap, tou_type, buffer_kw)
+    if head_rows.empty:
+        return {
+            "ok": False,
+            "seeds": {},
+            "daily_target_kwh": {k: round(v, 1) for k, v in levels.items()},
+            "reason": "no_off_peak",
+        }
+    head_dates = pd.to_datetime(work.loc[head_rows.index, "date"]).dt.normalize()
+    seeds: dict[str, Any] = {}
+    for key in ENERGY_SEED_KEYS:
+        need_ac = max(0.0, levels[key])
+        batt = need_ac / (window * eta) if need_ac > 0 else 0.0
+        lo_pcs, hi_pcs = 0.0, max(float(head_rows.max()), float(kw_pct[key]), 1.0)
+        best_pcs = hi_pcs
+        worst_fill = 0.0
+        for _ in range(24):
+            mid = (lo_pcs + hi_pcs) / 2.0
+            charge_ac = (
+                head_rows.clip(upper=mid).groupby(head_dates).sum() * dt * (eta * eta)
+            )
+            if need_ac <= 0:
+                fill = 1.0
+            elif charge_ac.empty:
+                fill = 0.0
+            else:
+                fill = float((charge_ac / need_ac).clip(upper=1.0).min())
+            if fill + 1e-9 >= 1.0:
+                best_pcs = mid
+                hi_pcs = mid
+                worst_fill = fill
+            else:
+                lo_pcs = mid
+                worst_fill = max(worst_fill, fill)
+        charge_ac = (
+            head_rows.clip(upper=best_pcs).groupby(head_dates).sum() * dt * (eta * eta)
+        )
+        if need_ac > 0 and not charge_ac.empty:
+            worst_fill = float((charge_ac / need_ac).clip(upper=1.0).min())
+        else:
+            worst_fill = 0.0 if need_ac > 0 else 1.0
+        if worst_fill + 1e-9 < 1.0 and not charge_ac.empty:
+            best_pcs = float(head_rows.max())
+            movable = float(charge_ac.min()) if len(charge_ac) else 0.0
+            worst_fill = min(1.0, movable / need_ac) if need_ac > 0 else 0.0
+            batt = (need_ac * worst_fill) / (window * eta) if worst_fill > 0 else 0.0
+        discharge_pcs = float(kw_pct[key])
+        pcs = max(discharge_pcs, best_pcs) if worst_fill > 0 else 0.0
+        seeds[key] = {
+            "batt_kwh": round(batt, 3),
+            "pcs_kw": round(pcs, 3) if pcs > 0 else 0.0,
+            "periods": sorted(periods),
+        }
+    return {
+        "ok": any(float(s.get("pcs_kw") or 0) > 0 for s in seeds.values()),
+        "seeds": seeds,
+        "daily_target_kwh": {k: round(v, 1) for k, v in levels.items()},
+        "periods": sorted(periods),
+        "reason": "ok",
     }
 
 
@@ -228,78 +635,261 @@ def profile_stats(
     *,
     buffer_kw: float = 0.0,
     schedule: dict | None = None,
+    strategy: str | None = None,
+    strategies: list[str] | None = None,
+    prices: dict | None = None,
+    charge_eff: float = 0.85,
+    include_half_peak: bool | None = None,
+    soc_min: float = 0.1,
+    soc_max: float = 0.9,
 ) -> dict[str, Any]:
-    """尖峰／離峰裕度統計；PCS 樣本含全覆蓋＋max/avg/min（＋兩充兩放）。"""
+    """目標時段／離峰統計；一次算齊半尖峰開／關兩組（切換只比大小）。"""
     cap = (
         contracts
         if isinstance(contracts, ContractCapacity)
         else ContractCapacity.from_dict(contracts)
     )
+    tiers = normalize_sizing_strategies(
+        strategies if strategies is not None else strategy
+    )
     work = df
     if work.empty or "period" not in work.columns or "date" not in work.columns:
-        return {"ok": False, "reason": "missing period"}
+        return {"ok": False, "reason": "missing period", "strategies": tiers}
+    if "kW" not in work.columns:
+        return {"ok": False, "reason": "missing kW", "strategies": tiers}
     if "hour" not in work.columns:
         work = enrich_interval_end(work)
 
     months = pd.to_datetime(work["date"]).dt.strftime("%Y-%m")
+    by_p = _kwh_by_period(work)
+    total = sum(by_p.values()) or 1.0
+    half_share = float(by_p.get("half_peak") or 0.0) / total * 100.0
+    use_half = _coerce_include_half_peak(include_half_peak)
 
-    peak_stats = _period_monthly_stats(work, months, "peak")
-    off_stats = _off_margin_monthly(work, cap, tou_type, buffer_kw)
-
-    pcs_sample = _min_tier(peak_stats, off_stats)
-    full_cover_kw, full_cover_src = _full_cover_pcs(work)
-    if full_cover_kw > 0:
-        # 全覆蓋置於樣本最前（dict 插入序）
-        pcs_sample = {"full_cover": full_cover_kw, **pcs_sample}
-
-    two_cycle_sources: dict[str, dict[str, float]] | None = None
-    if tou_type == "ThreeStage":
+    two_cycle_sources = None
+    tc_kw = 0.0
+    mid_h = _midday_off_peak_hours(tou_type, schedule)
+    if mid_h:
         tc_src, tc_kw = _two_cycle_sources(
             work, months, cap, tou_type, buffer_kw, schedule
         )
         if tc_kw > 0:
-            pcs_sample["two_cycle"] = tc_kw
             two_cycle_sources = tc_src
+
+    # 能量種子與半尖峰開關無關：只算一次尖峰日電量
+    energy = _energy_shift_seeds(
+        work,
+        cap,
+        tou_type,
+        buffer_kw,
+        soc_min=soc_min,
+        soc_max=soc_max,
+        charge_eff=charge_eff,
+    )
+
+    def _branch(include_hp: bool) -> dict[str, Any]:
+        q_pcs, _q_src = _power_pcs_quantiles(
+            work, cap, tou_type, buffer_kw, include_half_peak=include_hp
+        )
+        pcs = dict(q_pcs)
+        max_kw, max_src = _max_cover_pcs(
+            work, cap, tou_type, buffer_kw, include_half_peak=include_hp
+        )
+        if max_kw > 0:
+            pcs[SIZING_TIER_MAX] = max_kw
+        if tc_kw > 0:
+            pcs[SIZING_TIER_TWO_CYCLE] = tc_kw
+        branch: dict[str, Any] = {
+            "include_half_peak": include_hp,
+            "pcs_sample": pcs,
+            "energy_shift": energy,
+            "peak_ess_util": _tier_pct_map(work, pcs, peak_ess_util_pct),
+            "peak_coverage": _tier_pct_map(work, pcs, peak_coverage_pct),
+        }
+        if max_src:
+            branch["max_sources"] = max_src
+        return branch
+
+    branch_off = _branch(False)
+    branch_on = _branch(True)
+    active = branch_on if use_half else branch_off
 
     out: dict[str, Any] = {
         "ok": True,
+        "strategies": tiers,
+        "include_half_peak": use_half,
         "month_count": len(set(months)),
-        "peak_load": peak_stats,
-        "off_margin": off_stats,
-        "pcs_sample": pcs_sample,
-        "peak_ess_util": _tier_pct_map(work, pcs_sample, peak_ess_util_pct),
-        "peak_coverage": _tier_pct_map(work, pcs_sample, peak_coverage_pct),
+        "pcs_sample": active["pcs_sample"],
+        "energy_shift": active["energy_shift"],
+        "peak_ess_util": active["peak_ess_util"],
+        "peak_coverage": active["peak_coverage"],
+        "by_half_peak": {
+            "false": branch_off,
+            "true": branch_on,
+        },
     }
-    if full_cover_kw > 0:
-        out["full_cover_sources"] = full_cover_src
+    if active.get("max_sources"):
+        out["max_sources"] = active["max_sources"]
     if two_cycle_sources is not None:
         out["two_cycle_sources"] = two_cycle_sources
     return out
 
 
-def pcs_candidates_from_stats(stats: dict[str, Any]) -> list[float]:
-    """PCS 樣本（full_cover／max／avg／min／two_cycle，去重、>0）。"""
+def pcs_candidates_from_stats(
+    stats: dict[str, Any],
+    tiers: list[str] | None = None,
+) -> list[float]:
+    """依勾選策略取 PCS 樣本。"""
     if not stats.get("ok"):
         return []
     raw = stats.get("pcs_sample") or {}
-    keys: tuple[str, ...] = ("full_cover", "max", "avg", "min")
-    if float(raw.get("two_cycle") or 0) > 0:
-        keys = ("full_cover", "max", "avg", "min", "two_cycle")
+    keys = normalize_sizing_strategies(
+        tiers if tiers is not None else stats.get("strategies")
+    )
     return sorted(
         {round(float(raw[k]), 3) for k in keys if float(raw.get(k) or 0) > 0}
     )
 
 
-def fallback_grid(regular_kw: float) -> list[tuple[float, float]]:
-    """profile 失敗時契約比例大網格。"""
-    if regular_kw <= 0:
-        regular_kw = 500.0
-    grid: list[tuple[float, float]] = []
-    for ratio in (0.05, 0.1, 0.15, 0.2, 0.3, 0.4):
-        pcs = regular_kw * ratio
-        for mult in (2, 2.5, 3, 3.5, 4):
-            grid.append((round(pcs, 3), round(pcs * mult, 3)))
-    return grid
+def shortlist_combinations(
+    stats: dict[str, Any],
+    tiers: list[str],
+    *,
+    energy_keys: list[str] | None = None,
+) -> dict[str, Any]:
+    """功率面向取 PCS × 電量面向取電池，自由組合並去重。"""
+    combos: list[dict[str, Any]] = []
+    seen: set[tuple[float, float]] = set()
+    pcs_sample = stats.get("pcs_sample") or {}
+    energy = (stats.get("energy_shift") or {}).get("seeds") or {}
+    ekeys = normalize_energy_seeds(energy_keys)
+
+    def _add(
+        pcs: float,
+        batt: float,
+        *,
+        source: str,
+        seed: str,
+        extra: dict[str, Any] | None = None,
+    ) -> None:
+        pcs_r = round(float(pcs), 3)
+        batt_r = round(float(batt), 3)
+        if pcs_r <= 0 or batt_r <= 0:
+            return
+        key = (pcs_r, batt_r)
+        if key in seen:
+            return
+        seen.add(key)
+        row = {
+            "pcs_kw": pcs_r,
+            "batt_kwh": batt_r,
+            "hours": round(batt_r / pcs_r, 3) if pcs_r > 0 else 0,
+            "seed_source": source,
+            "seed_id": seed,
+        }
+        if extra:
+            row.update(extra)
+        combos.append(row)
+
+    pcs_opts: list[tuple[float, str]] = []
+    pcs_seen: set[float] = set()
+    for tid in tiers:
+        pcs = round(float(pcs_sample.get(tid) or 0), 3)
+        if pcs <= 0 or pcs in pcs_seen:
+            continue
+        pcs_seen.add(pcs)
+        pcs_opts.append((pcs, tid))
+
+    batt_opts: list[tuple[float, str]] = []
+    batt_seen: set[float] = set()
+    for level in ekeys:
+        seed = energy.get(level) or {}
+        batt = round(float(seed.get("batt_kwh") or 0), 3)
+        if batt <= 0 or batt in batt_seen:
+            continue
+        batt_seen.add(batt)
+        batt_opts.append((batt, level))
+
+    if pcs_opts and batt_opts:
+        for pcs, tid in pcs_opts:
+            for batt, level in batt_opts:
+                _add(
+                    pcs,
+                    batt,
+                    source="cross",
+                    seed=f"{tid}x{level}",
+                    extra={"pcs_seed": tid, "energy_level": level},
+                )
+    elif not pcs_opts and batt_opts:
+        for level in ekeys:
+            seed = energy.get(level) or {}
+            _add(
+                float(seed.get("pcs_kw") or 0),
+                float(seed.get("batt_kwh") or 0),
+                source="energy",
+                seed=level,
+                extra={"energy_level": level},
+            )
+
+    pcs_list = sorted({round(float(c["pcs_kw"]), 3) for c in combos})
+    return {
+        "combinations": combos,
+        "pcs_list": pcs_list,
+        "grid_points": len(combos),
+        "energy_keys": ekeys,
+    }
+
+
+def sample_from_profile(
+    stats: dict[str, Any],
+    diagnosis: dict[str, Any],
+    *,
+    tou_type: str,
+    schedule: dict | None = None,
+    strategy: str | None = None,
+    strategies: list[str] | None = None,
+    energy_keys: list[str] | None = None,
+) -> dict[str, Any]:
+    """已有 profile／diagnosis → 短名單配置（尚未 dispatch）。"""
+    tiers = normalize_sizing_strategies(
+        strategies if strategies is not None else (
+            strategy if strategy is not None else None
+        )
+    )
+    if strategies is None and strategy is None:
+        avail = [
+            a["id"]
+            for a in (diagnosis.get("available_strategies") or [])
+            if a.get("ok")
+        ]
+        if avail:
+            tiers = avail
+    ekeys = normalize_energy_seeds(energy_keys)
+
+    if not stats.get("ok"):
+        return {
+            "diagnosis": diagnosis,
+            "strategies": tiers,
+            "energy_keys": ekeys,
+            "profile_stats": stats,
+            "pcs_list": [],
+            "combinations": [],
+            "grid_points": 0,
+            "sample_source": "none",
+        }
+
+    built = shortlist_combinations(stats, tiers, energy_keys=ekeys)
+    sample_source = "profile" if built["combinations"] else "none"
+    return {
+        "diagnosis": diagnosis,
+        "strategies": tiers,
+        "energy_keys": ekeys,
+        "profile_stats": stats,
+        "pcs_list": built["pcs_list"],
+        "combinations": built["combinations"],
+        "grid_points": built["grid_points"],
+        "sample_source": sample_source,
+    }
 
 
 def plan_sample_grid(
@@ -309,66 +899,85 @@ def plan_sample_grid(
     *,
     buffer_kw: float = 0.0,
     schedule: dict | None = None,
+    strategy: str | None = None,
+    strategies: list[str] | None = None,
+    energy_keys: list[str] | None = None,
+    prices: dict | None = None,
+    charge_eff: float = 0.85,
+    include_half_peak: bool | None = None,
+    soc_min: float = 0.1,
+    soc_max: float = 0.9,
 ) -> dict[str, Any]:
-    """負載樣本 → PCS 候選 → 配置組合（尚未 dispatch）。"""
+    """診斷／策略多選 → 短名單配置（尚未 dispatch）。"""
     cap = (
         contracts
         if isinstance(contracts, ContractCapacity)
         else ContractCapacity.from_dict(contracts)
     )
     stats = profile_stats(
-        df, cap, tou_type, buffer_kw=buffer_kw, schedule=schedule
+        df,
+        cap,
+        tou_type,
+        buffer_kw=buffer_kw,
+        schedule=schedule,
+        strategies=list(SIZING_TIER_KEYS),
+        prices=prices,
+        charge_eff=charge_eff,
+        include_half_peak=include_half_peak,
+        soc_min=soc_min,
+        soc_max=soc_max,
     )
-    peak_h = peak_hours_max(tou_type, schedule=schedule)
-    # 兩充兩放與其他檔位相同：GRID_HOURS_MIN～尖峰時長；回傳鍵僅供 UI 顯示
-    has_two_cycle = float((stats.get("pcs_sample") or {}).get("two_cycle") or 0) > 0
-
-    pcs_list = pcs_candidates_from_stats(stats)
-    if pcs_list:
-        pairs = combination_grid(pcs_list, peak_h)
-        sample_source = "profile"
-    else:
-        pairs = fallback_grid(cap.regular_kw)
-        sample_source = "fallback"
-        pcs_list = sorted({round(p, 3) for p, _ in pairs})
-
-    combinations = [
-        {
-            "pcs_kw": pcs,
-            "batt_kwh": batt,
-            "hours": round(batt / pcs, 3) if pcs > 0 else 0,
-        }
-        for pcs, batt in pairs
-    ]
-    return {
-        "profile_stats": stats,
-        "peak_hours_max": peak_h,
-        "two_cycle_hours_max": peak_h if has_two_cycle else None,
-        "sample_source": sample_source,
-        "combinations": combinations,
-        "grid_points": len(combinations),
-    }
+    diagnosis = _diagnosis_from_profile(
+        df,
+        tou_type,
+        stats,
+        include_half_peak=include_half_peak,
+        schedule=schedule,
+    )
+    return sample_from_profile(
+        stats,
+        diagnosis,
+        tou_type=tou_type,
+        schedule=schedule,
+        strategy=strategy,
+        strategies=strategies,
+        energy_keys=energy_keys,
+    )
 
 
 def _pcs_util_score(row: dict[str, Any]) -> float:
-    """使用效率（平均）：PCS 日均（夏／非夏）+ SOC 日循環（夏／非夏）；含空轉日，循環不封頂。"""
-    vals = (
-        float(row.get("pcs_daily_avg_pct_summer") or 0),
-        float(row.get("pcs_daily_avg_pct_non_summer") or 0),
-        float(row.get("daily_cycle_pct_summer") or 0),
-        float(row.get("daily_cycle_pct_non_summer") or 0),
-    )
-    return sum(vals) / 4.0
+    """可用季節平均 PCS 日均使用率（忽略無資料季節）。"""
+    vals = []
+    for key in ("pcs_daily_avg_pct_summer", "pcs_daily_avg_pct_non_summer"):
+        if key in row and row.get(key) is not None:
+            vals.append(max(0.0, float(row.get(key) or 0)))
+    return sum(vals) / len(vals) if vals else 0.0
 
 
-def _eff_product(row: dict[str, Any]) -> float:
-    """四項效率相乘：PCS日均夏／非夏 × SOC日循環夏／非夏。"""
-    return (
-        max(0.0, float(row.get("pcs_daily_avg_pct_summer") or 0))
-        * max(0.0, float(row.get("pcs_daily_avg_pct_non_summer") or 0))
-        * max(0.0, float(row.get("daily_cycle_pct_summer") or 0))
-        * max(0.0, float(row.get("daily_cycle_pct_non_summer") or 0))
-    )
+def _cycle_util_score(row: dict[str, Any]) -> float:
+    """可用季節平均循環利用率（可超過 100%，反映多循環）。"""
+    vals = []
+    for key in ("daily_cycle_pct_summer", "daily_cycle_pct_non_summer"):
+        if key in row and row.get(key) is not None:
+            vals.append(max(0.0, float(row.get(key) or 0)))
+    return sum(vals) / len(vals) if vals else 0.0
+
+
+def _engineering_balance_score(row: dict[str, Any]) -> dict[str, float]:
+    """工程折衷：savings × 循環利用率（未含設備成本）。
+
+    PCS 利用率已反映在節省金額，不再二次加權；電池循環（SOC）可超過 100%。
+    """
+    savings = max(0.0, float(row.get("savings") or 0))
+    pcs_u = _pcs_util_score(row)
+    cycle_u = _cycle_util_score(row)
+    score = savings * (cycle_u / 100.0)
+    return {
+        "score": score,
+        "savings": savings,
+        "pcs_util_avg": round(pcs_u, 1),
+        "cycle_util_avg": round(cycle_u, 1),
+    }
 
 
 def _smaller_size_tiebreak(row: dict[str, Any]) -> tuple[float, float]:
@@ -400,11 +1009,11 @@ def pick_results(
     *,
     before_total: int = 0,
 ) -> dict[str, Any]:
-    """標記 grid。
+    """標記 grid（savings＝電費節省／第1層排序鍵）。
 
     - 金額最大：只比 savings
     - 使用率最大：單位電容量節省（savings÷batt）；同分再比平均使用效率、較小量體
-    - 推薦：四項效率相乘 × 總節省金額（任一项≈0 則整份偏低）
+    - 工程折衷建議：savings × 循環利用率（可 >100%；PCS 已含在金額內，不再二次加權；未含設備成本）
     """
     if not rows:
         return {
@@ -419,6 +1028,14 @@ def pick_results(
     for r in rows:
         row = dict(r)
         row["savings_pct"] = round(_savings_pct(row, before_total), 2)
+        bal = _engineering_balance_score(row)
+        row["engineering_score"] = round(bal["score"], 3)
+        row["engineering_score_parts"] = {
+            "savings": bal["savings"],
+            "pcs_util_avg": bal["pcs_util_avg"],
+            "cycle_util_avg": bal["cycle_util_avg"],
+            "includes_capex": False,
+        }
         enriched.append(row)
 
     best_effort = max(
@@ -438,7 +1055,7 @@ def pick_results(
     )
 
     def _rec_joint(row: dict[str, Any]) -> tuple:
-        score = _eff_product(row) * max(0.0, float(row["savings"]))
+        score = float(row.get("engineering_score") or 0)
         return (score, float(row["savings"]), *_smaller_size_tiebreak(row))
 
     recommended = max(pool, key=_rec_joint) if viable else None

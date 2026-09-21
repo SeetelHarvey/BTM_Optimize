@@ -3,7 +3,8 @@
 import logging
 import time
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from typing import Any
 
 import pandas as pd
 
@@ -24,6 +25,8 @@ class ImportedLoad:
     start_date: str
     end_date: str
     created: float
+    # L1 工作 df／L2 profile／sample 等；put 換檔即丟
+    caches: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -126,7 +129,10 @@ def _selfcheck() -> None:
     )
     st = status(iid)
     assert st["remaining_sec"] > TTL_SEC - 5
-    assert len(get(iid).df) == 1
+    item = get(iid)
+    assert len(item.df) == 1
+    item.caches["probe"] = {"ok": True}
+    assert get(iid).caches["probe"]["ok"] is True
     iid2 = put(
         pd.DataFrame({"kW": [2.0, 3.0]}),
         voltage_level="HV",
@@ -140,6 +146,7 @@ def _selfcheck() -> None:
     except ImportNotFound:
         pass
     assert len(get(iid2).df) == 2
+    assert get(iid2).caches == {}
     assert delete(iid2) is True
     assert delete(iid2) is False
     try:

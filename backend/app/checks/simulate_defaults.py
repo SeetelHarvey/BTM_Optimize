@@ -13,9 +13,14 @@ def main() -> None:
         "reservePerformancePrice",
         "reserveEnergyPrice",
         "reserveMonthlyDispatchCount",
+        "evaluateContractReduction",
+        "autoAdjustOffPeakContract",
     ):
         assert key in sim
-        assert float(sim[key]) >= 0
+        if key.endswith("Contract") or key.startswith("evaluate"):
+            assert isinstance(sim[key], bool)
+        else:
+            assert float(sim[key]) >= 0
     bundle = default_settings()
     assert "simulate" in bundle
     print("ok", sorted(sim.keys()))

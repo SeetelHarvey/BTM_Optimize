@@ -86,9 +86,11 @@ def _bid_from_manual(
     return 0.0
 
 
-def empty_schedule() -> dict[str, dict[str, list[float]]]:
-    """24 小時全 0 矩陣。"""
-    z = [0.0] * 24
+def empty_schedule(step_minutes: int = 60) -> dict[str, dict[str, list[float]]]:
+    """依時段步階產生全 0 投標矩陣（60 分→24 格；30 分→48 格）。"""
+    step = max(1, int(step_minutes) or 60)
+    n = max(1, int(round((24 * 60) / step)))
+    z = [0.0] * n
     return {
         "summer": {"weekday": list(z), "saturday": list(z), "sunday": list(z)},
         "non_summer": {"weekday": list(z), "saturday": list(z), "sunday": list(z)},
@@ -109,10 +111,14 @@ def resolve_bids_series(
         row = df.iloc[i]
         day_key = None
         slot = None
-        if row.get("timestamp") is not None:
+        hol = bool(row.get("is_holiday", False))
+        if "date" in row.index and pd.notna(row.get("date")):
+            day_key = tou_feat.schedule_day_key(row["date"], is_holiday=hol)
+        elif row.get("timestamp") is not None:
+            from app.services.cleaning.formats.tpc import interval_date
+
             day_key = tou_feat.schedule_day_key(
-                row["timestamp"],
-                is_holiday=bool(row.get("is_holiday", False)),
+                interval_date(row["timestamp"]), is_holiday=hol
             )
         if "min" in row.index and pd.notna(row["min"]):
             slot = tou_feat.slot_index(
@@ -410,7 +416,8 @@ def build_auto_schedule(
     performance_price: float = 0.0,
 ) -> tuple[dict[str, dict[str, list[float]]], dict[str, Any]]:
     """依歷史事件第 5 百分位可履約量產生推薦矩陣。"""
-    sched = empty_schedule()
+    sched = empty_schedule(step_minutes)
+    slot_count = len(sched["summer"]["weekday"])
     load = df["kW"].astype(float).to_numpy()
     grid = standby["grid_kw"].astype(float).to_numpy()
     ess = standby["ess_kw"].astype(float).to_numpy()
@@ -424,12 +431,17 @@ def build_auto_schedule(
         season = str(row.get("season") or "")
         if season not in ("summer", "non_summer"):
             continue
-        if row.get("timestamp") is None:
+        hol = bool(row.get("is_holiday", False))
+        if "date" in row.index and pd.notna(row.get("date")):
+            day_key = tou_feat.schedule_day_key(row["date"], is_holiday=hol)
+        elif row.get("timestamp") is not None:
+            from app.services.cleaning.formats.tpc import interval_date
+
+            day_key = tou_feat.schedule_day_key(
+                interval_date(row["timestamp"]), is_holiday=hol
+            )
+        else:
             continue
-        day_key = tou_feat.schedule_day_key(
-            row["timestamp"],
-            is_holiday=bool(row.get("is_holiday", False)),
-        )
         slot = 0
         if "min" in df.columns and pd.notna(row["min"]):
             slot = tou_feat.slot_index(step_minutes=step_minutes, data_min=int(row["min"]))
@@ -457,11 +469,17 @@ def build_auto_schedule(
         # 正淨值粗篩：有容量或效能價才保留（機會成本留給最終帳單）
         if mw > 0 and (capacity_price + performance_price) <= 0:
             mw = 0.0
-        if season in sched and day_key in sched[season] and 0 <= slot < 24:
+        if season in sched and day_key in sched[season] and 0 <= slot < slot_count:
             sched[season][day_key][slot] = mw
             if mw > 0:
                 meta_cells += 1
-    return sched, {"cells_positive": meta_cells, "buckets": len(buckets), "estimate": "p05"}
+    return sched, {
+        "cells_positive": meta_cells,
+        "buckets": len(buckets),
+        "estimate": "p05",
+        "slot_count": slot_count,
+        "step_minutes": int(step_minutes),
+    }
 
 
 def select_monthly_events(
