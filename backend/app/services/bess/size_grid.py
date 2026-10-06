@@ -8,6 +8,7 @@ from app.services.billing.demand import bill_mode
 from app.services.billing.overage import overage_ceiling
 from app.services.contracts import ContractCapacity
 from app.services.cleaning.formats.tpc import enrich_interval_end
+from app.services.quantize import ceil_to_step
 from app.services.schedule import (
     default_intraday_off_peak_hours,
     intraday_off_peak_hours,
@@ -280,7 +281,8 @@ def _power_pcs_quantiles(
         b = float(head.quantile(q))
         kw_out[tid] = round(a, 3)
         off_out[tid] = round(b, 3)
-        pcs[tid] = round(min(a, b), 3) if a > 0 and b > 0 else 0.0
+        raw = min(a, b) if a > 0 and b > 0 else 0.0
+        pcs[tid] = ceil_to_step(raw) if raw > 0 else 0.0
     return pcs, {
         "kw": kw_out,
         "off_headroom": off_out,
@@ -501,16 +503,17 @@ def _max_cover_pcs(
     daily_off = _daily_off_headroom_kw(work, cap, tou_type, buffer_kw)
     day_off = float(daily_off.get(day, 0.0)) if len(daily_off) else 0.0
     pcs = min(max_kw, day_off) if day_off > 0 else 0.0
+    pcs_out = ceil_to_step(pcs) if pcs > 0 else 0.0
     src = {
         "max_kw": round(max_kw, 3),
         "day_off_headroom_kw": round(day_off, 3),
-        "pcs_kw": round(pcs, 3) if pcs > 0 else 0.0,
+        "pcs_kw": pcs_out,
         "periods": sorted(periods),
     }
     if not (pcs > 0):
         src["reason"] = "off_peak_shortfall"
         return 0.0, src
-    return round(pcs, 3), src
+    return pcs_out, src
 
 
 def _energy_shift_seeds(
@@ -575,6 +578,18 @@ def _energy_shift_seeds(
             "reason": "no_off_peak",
         }
     head_dates = pd.to_datetime(work.loc[head_rows.index, "date"]).dt.normalize()
+    peak_days = pd.DatetimeIndex(daily_kwh.index)
+
+    def _charge_fill(pcs_cap: float, need: float) -> tuple[pd.Series, float]:
+        """離峰可回充；只評有尖峰電量的日，避免標註邊界殘日拉低 fill。"""
+        charge = head_rows.clip(upper=pcs_cap).groupby(head_dates).sum() * dt * (eta * eta)
+        charge = charge.reindex(peak_days).dropna()
+        if need <= 0:
+            return charge, 1.0
+        if charge.empty:
+            return charge, 0.0
+        return charge, float((charge / need).clip(upper=1.0).min())
+
     seeds: dict[str, Any] = {}
     for key in ENERGY_SEED_KEYS:
         need_ac = max(0.0, levels[key])
@@ -584,15 +599,7 @@ def _energy_shift_seeds(
         worst_fill = 0.0
         for _ in range(24):
             mid = (lo_pcs + hi_pcs) / 2.0
-            charge_ac = (
-                head_rows.clip(upper=mid).groupby(head_dates).sum() * dt * (eta * eta)
-            )
-            if need_ac <= 0:
-                fill = 1.0
-            elif charge_ac.empty:
-                fill = 0.0
-            else:
-                fill = float((charge_ac / need_ac).clip(upper=1.0).min())
+            _chg, fill = _charge_fill(mid, need_ac)
             if fill + 1e-9 >= 1.0:
                 best_pcs = mid
                 hi_pcs = mid
@@ -600,13 +607,7 @@ def _energy_shift_seeds(
             else:
                 lo_pcs = mid
                 worst_fill = max(worst_fill, fill)
-        charge_ac = (
-            head_rows.clip(upper=best_pcs).groupby(head_dates).sum() * dt * (eta * eta)
-        )
-        if need_ac > 0 and not charge_ac.empty:
-            worst_fill = float((charge_ac / need_ac).clip(upper=1.0).min())
-        else:
-            worst_fill = 0.0 if need_ac > 0 else 1.0
+        charge_ac, worst_fill = _charge_fill(best_pcs, need_ac)
         if worst_fill + 1e-9 < 1.0 and not charge_ac.empty:
             best_pcs = float(head_rows.max())
             movable = float(charge_ac.min()) if len(charge_ac) else 0.0
@@ -615,8 +616,8 @@ def _energy_shift_seeds(
         discharge_pcs = float(kw_pct[key])
         pcs = max(discharge_pcs, best_pcs) if worst_fill > 0 else 0.0
         seeds[key] = {
-            "batt_kwh": round(batt, 3),
-            "pcs_kw": round(pcs, 3) if pcs > 0 else 0.0,
+            "batt_kwh": ceil_to_step(batt) if batt > 0 else 0.0,
+            "pcs_kw": ceil_to_step(pcs) if pcs > 0 else 0.0,
             "periods": sorted(periods),
         }
     return {
@@ -696,9 +697,9 @@ def profile_stats(
             work, cap, tou_type, buffer_kw, include_half_peak=include_hp
         )
         if max_kw > 0:
-            pcs[SIZING_TIER_MAX] = max_kw
+            pcs[SIZING_TIER_MAX] = ceil_to_step(max_kw)
         if tc_kw > 0:
-            pcs[SIZING_TIER_TWO_CYCLE] = tc_kw
+            pcs[SIZING_TIER_TWO_CYCLE] = ceil_to_step(tc_kw)
         branch: dict[str, Any] = {
             "include_half_peak": include_hp,
             "pcs_sample": pcs,
@@ -747,7 +748,7 @@ def pcs_candidates_from_stats(
         tiers if tiers is not None else stats.get("strategies")
     )
     return sorted(
-        {round(float(raw[k]), 3) for k in keys if float(raw.get(k) or 0) > 0}
+        {ceil_to_step(float(raw[k])) for k in keys if float(raw.get(k) or 0) > 0}
     )
 
 
@@ -772,9 +773,13 @@ def shortlist_combinations(
         seed: str,
         extra: dict[str, Any] | None = None,
     ) -> None:
-        pcs_r = round(float(pcs), 3)
-        batt_r = round(float(batt), 3)
+        pcs_r = ceil_to_step(pcs)
+        batt_r = ceil_to_step(batt)
         if pcs_r <= 0 or batt_r <= 0:
+            return
+        # 電池設計：C-rate ≤ 0.5 ⇔ hours ≥ 2
+        hours = batt_r / pcs_r
+        if hours < 2.0 - 1e-9:
             return
         key = (pcs_r, batt_r)
         if key in seen:
@@ -783,7 +788,7 @@ def shortlist_combinations(
         row = {
             "pcs_kw": pcs_r,
             "batt_kwh": batt_r,
-            "hours": round(batt_r / pcs_r, 3) if pcs_r > 0 else 0,
+            "hours": round(hours, 3),
             "seed_source": source,
             "seed_id": seed,
         }
@@ -794,7 +799,7 @@ def shortlist_combinations(
     pcs_opts: list[tuple[float, str]] = []
     pcs_seen: set[float] = set()
     for tid in tiers:
-        pcs = round(float(pcs_sample.get(tid) or 0), 3)
+        pcs = ceil_to_step(float(pcs_sample.get(tid) or 0))
         if pcs <= 0 or pcs in pcs_seen:
             continue
         pcs_seen.add(pcs)
@@ -804,7 +809,7 @@ def shortlist_combinations(
     batt_seen: set[float] = set()
     for level in ekeys:
         seed = energy.get(level) or {}
-        batt = round(float(seed.get("batt_kwh") or 0), 3)
+        batt = ceil_to_step(float(seed.get("batt_kwh") or 0))
         if batt <= 0 or batt in batt_seen:
             continue
         batt_seen.add(batt)
@@ -831,7 +836,7 @@ def shortlist_combinations(
                 extra={"energy_level": level},
             )
 
-    pcs_list = sorted({round(float(c["pcs_kw"]), 3) for c in combos})
+    pcs_list = sorted({round(float(c["pcs_kw"]), 1) for c in combos})
     return {
         "combinations": combos,
         "pcs_list": pcs_list,
@@ -986,7 +991,7 @@ def _smaller_size_tiebreak(row: dict[str, Any]) -> tuple[float, float]:
 
 
 def _row_key(row: dict[str, Any]) -> tuple[float, float]:
-    return (round(float(row["pcs_kw"]), 3), round(float(row["batt_kwh"]), 3))
+    return (round(float(row["pcs_kw"]), 1), round(float(row["batt_kwh"]), 1))
 
 
 def _savings_pct(row: dict[str, Any], before_total: int) -> float:

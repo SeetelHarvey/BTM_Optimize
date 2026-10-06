@@ -13,10 +13,12 @@ const I18N = {
       overageNone: "無超約",
       basic: "基本電費",
       overage: "超約",
+      overageTab: "超約電費",
       energy: "流動電費",
       total: "合計",
       annual: "年化（粗估）",
       months: "月明細",
+      monthsTab: "每月明細",
       monthCol: "月份",
       subtotal: "小計",
       breakdown: "電費結構",
@@ -61,34 +63,31 @@ const I18N = {
       sample: "範例檔",
       loadSample: "載入",
       expired: "資料逾期，請重新匯入",
-      needReselect: "重新整理後無法沿用原檔，請再選一次檔案後匯入。",
-      currentTitle: "當前資料",
-      currentLive: "有效",
-      currentExpired: "已逾期",
-      currentRows: "{n} 列",
       start: "開始日",
       end: "結束日",
       contracts: "契約容量",
       range: "區間／方案",
       bill: "匯入",
-      rebill: "重算電費",
       clear: "清除資料",
-      cleared: "已清除匯入資料",
       needFile: "請先選檔",
       needDates: "請先有開始／結束日（選檔會自動偵測）",
       needSchema: "契約欄位尚未載入",
+      needRegular: "經常契約須大於 0",
     },
     settings: {
       title: "設定",
       load: "重新載入系統預設",
-      previewHint: "此處切換僅預覽／編輯該方案預設電價，不改已匯入資料的方案",
       energy: "流動電價（元／kWh）",
-      demand: "基本電費單價（元／kW）",
+      demand: "基本電費（元／kW）",
+      tabRates: "電費單價",
+      tabTime: "時間軸",
+      tabHolidays: "紀念日及節日",
       na: "不適用",
       summerRange: "夏月區間",
-      schedule: "時段時間軸",
-      shared: "通用",
+      schedule: "時段",
       holidays: "假日",
+      holidayDate: "日期",
+      holidayName: "名稱",
       addHoliday: "新增假日",
       season: "季節",
       day: "日類型",
@@ -121,45 +120,53 @@ const I18N = {
     },
     simulate: {
       title: "模擬試算",
-      functions: "功能選擇（可複選）",
       demand: "契約容量",
       tou: "時間電價",
       reserve: "即時備轉",
       backup: "緊急備援",
       backupReserveKwh: "保留電量（kWh）",
-      backupReserveHint: "從可調度能量扣減；少數案場選用",
       largeUser: "用電大戶",
       run: "開始試算",
-      simRerun: "重新試算",
       simClearResult: "清除結果",
       simExportXlsx: "匯出 XLSX",
       simExporting: "匯出中…",
       simExportErr: "匯出失敗",
-      simRunningKeep: "配置組合試算中…",
-      simResultStale: "參數或契約已變更，報告可能與目前設定不符，請重新試算。",
-      simResultSummary: "上次試算",
-      simLastRunRerun: "重新試算中，以下為先前結果",
-      simLastRunCleared: "已清除以下試算報告",
-      simLastRunDismiss: "關閉",
-      simParams: "試算參數",
+      simResultStale: "參數或契約已變更，報告可能與目前設定不符，請清除結果後再開始試算。",
+      simStepParams: "參數",
+      simStepFns: "功能",
+      simStepConfig: "配置",
+      simStepResult: "結果",
+      simNext: "下一步",
+      simBack: "上一步",
       loading: "匯入資料中…",
       simErr: "試算失敗",
       simSavings: "預估節省（元）",
       simSkipped: "略過功能",
       simBatt: "Battery（kWh）",
       simHours: "時數（h）",
-      simReport: "試算報告",
+      simReport: "效益報告",
+      simBenefitBasic: "基本電費",
+      simBenefitEnergy: "流動電費",
+      simBenefitOverage: "超約電費",
+      simBenefitExtra: "額外效益",
+      simBenefitBefore: "原始",
+      simBenefitAfter: "儲能後",
+      simBenefitAmount: "效益",
+      simBenefitIncrease: "增加",
+      simBenefitBasicSourceContract: "契約容量調整",
+      simBenefitBasicSourcePlan: "電價方案變更",
+      simBenefitBasicSourceBoth: "電價方案與契約容量調整",
+      simBenefitReserveCapacity: "容量費",
+      simBenefitReservePerformance: "效能費",
+      simBenefitReserveActivation: "調度電能",
       simKpiBefore: "原始電費",
       simKpiAfter: "更改後電費",
       simPlanChange: "方案更改",
       simScenarioPlan: "模擬電價方案",
-      simScenarioPlanHint: "",
       simScenarioContracts: "模擬契約容量",
-      simPlanSwitchedNote: "已切換方案（原始＝匯入；更改後＝新方案）",
-      simEnergyTransferHint: "",
-      simEnergyTransferScenarioOnly: "",
       simKwhBefore: "原始（無儲能）",
       simKwhAfter: "更改後（含儲能）",
+      simReportPlan: "方案",
       simReportBaselineTou: "原始方案",
       simReportSimulateTou: "更改方案",
       simXferSideBefore: "僅原始",
@@ -169,10 +176,6 @@ const I18N = {
       simKpiBillSave: "電費節省",
       simKpiReserveIncome: "備轉收入",
       simKpiTotalBenefit: "合計效益",
-      simStage2Note: "",
-      stage2WarningLower: "含契約／備轉後效益明顯低於僅儲能調度，請檢視假設",
-      stage2WarningOverage: "含契約調整後超約惡化，降容建議可能過積極",
-      contractReductionSuggested: "建議經常契約 {kw} kW（可降 {cut} kW）",
       simKpiSize: "推薦配置",
       simSizingRunning: "試算中…",
       simEvaluatingExtras: "評估契約與備轉…",
@@ -186,44 +189,61 @@ const I18N = {
       simSeedSrcCross: "組合",
       simPeakEssUtil: "尖峰PCS使用率",
       simPeakCoverage: "尖峰負載覆蓋率",
-      simSampleMeta: "預計試算 {pts} 組（已去重）",
       simSampleMetaDone: "已試算 {pts} 組",
-      simShortlistSummary: "{pcs} 個 PCS × {batt} 個電池 → 去重後 {pts} 組",
-      simShortlistRange: "PCS {pcsMin}–{pcsMax} kW · 電池 {battMin}–{battMax} kWh",
+      simShortlistSummary: "{pts} 組 · PCS {pcsMin}–{pcsMax} kW · 電池 {battMin}–{battMax} kWh",
       simStrategyChange: "變更策略",
-      simStrategy: "配置策略",
+      simSizingMode: "試算方式",
+      simSizingModeGrid: "交叉",
+      simSizingModeSingle: "指定",
+      simManualPcs: "PCS（kW）",
+      simManualBatt: "電池容量（kWh）",
+      simNeedManual: "請填入大於 0 的 PCS 與電池容量",
       simPowerSeeds: "功率面向",
       simEnergySeedsAuto: "電量面向",
-      simShortlistPreview: "候選組合",
-      simShortlistEmpty: "尚無有效候選（功率選 PCS、電量選電池後會交叉組合）",
-      simFnStatusTitle: "",
       simStatusOn: "已計算",
       simStatusOff: "未啟用",
       simStatusSkip: "不適用",
       simStatusPending: "評估中",
       simStatusRolled: "已回退",
       simStatusAdopted: "採用",
-      simReasonRec: "",
-      simReasonMaxSave: "期間節省最高",
-      simReasonMaxUtil: "每 kWh 節省最高",
-      simWhyTitle: "為何選這個",
-      simWhyExtrasNote: "",
+      simStatusUnchanged: "維持現行",
+      simFeatureResults: "功能結果",
+      simFeatureDemand: "契約容量",
+      simFeatureBackup: "備援",
+      simFeatureReserve: "即時備轉",
+      simMetricMode: "模式",
+      simMetricBuffer: "防超約裕度",
+      simMetricRegular: "採用經常契約",
+      simMetricReducible: "可降低",
+      simMetricPeakMax: "尖峰最高",
+      simMetricHalfPeakDelta: "半尖峰補額",
+      simMetricOffPeakReplace: "離峰補額",
+      simMetricBackup: "備援保留",
+      simMetricSocMin: "有效 SOC 下限",
+      simMetricReserveIncome: "備轉收入",
+      simMetricBenefit: "效益",
+      simReasonDemandBuffer: "依契約上限與裕度執行防超約。",
+      simReasonContractNoGain: "規則提案未降低期間總電費，維持現行契約。",
+      simReasonContractRuleAdopted: "規則提案重算後可降低期間總電費，已採用。",
+      simContractFnHint: "自動調整契約容量。",
+      simContractCurrent: "現行契約",
+      simContractFinal: "推薦更改",
+      simContractAllowance: "容許額度",
+      simContractPending: "正在依尖峰最高需量評估可調整的契約容量與各時段補額…",
+      simReasonSocFloor: "保留備援電量並提高有效 SOC 下限。",
+      simReasonAutoBid: "依可用 PCS 與 SOC 餘裕產生投標。",
+      simReasonManualBid: "依使用者設定的投標排程。",
+      simReasonNoNetGain: "備轉無淨增益，已回退為 0 投標。",
       simMapAxisPcs: "PCS（kW）",
       simMapAxisBatt: "電池（kWh）",
       simMapAxisSave: "期間節省（元）",
-      simMapLegendSize: "點越大＝PCS 越大",
-      simMapLegendColor: "越亮＝利用率越高",
-      simMapLegendMarks: "綠＝推薦 · 金＝金額 · 紫＝利用率",
-      simMapClickHint: "",
       simMapBest: "最佳推薦",
-      simChartBubbleHint: "",
-      simCapexNote: "",
       simOtherPlans: "其他方案",
-      simBattBenefit: "每 1 kWh 電池的期間節省",
       simChartPcsUtil: "PCS 利用率（%）",
       simChartPeriodSave: "期間節省（元）",
       simChartMarkBatt: "每 kWh 效益",
       simBillSizingOnly: "含儲能",
+      simBillAfterBess: "儲能後總電費",
       simBillWithContract: "含契約調整",
       simBillWithReserve: "含即時備轉",
       simDispatchSizing: "僅儲能調度",
@@ -238,20 +258,20 @@ const I18N = {
       simStrategyP90: "P90 穩健",
       simStrategyUnavailable: "目前不可用",
       simIncludeHalfPeak: "考量半尖峰",
-      simIncludeHalfPeakHint: "",
-      simIncludeHalfOn: "開啟",
       simIncludeHalfOff: "關閉",
-      simRecSchedules: "自動推薦排程",
+      simRecSchedules: "排程呈現",
       simRecTou: "時間電價目標 SOC",
       simRecReserve: "即時備轉投標",
       simEnergyTransfer: "用電轉移",
       simKwhDelta: "差異 kWh",
       simKwhDeltaPct: "差異％",
+      simXferAmount: "金額差異",
+      simXferItemAmount: "金額",
+      simXferEffective: "有效轉移量",
+      simXferEnergy: "流動電費差異",
       simGridFold: "配置組合試算",
       simGridFoldOpen: "展開",
-      simGridFoldClose: "收合",
       simTwoCycle: "兩充兩放",
-      simBillCompare: "電費對照",
       simViewPanel: "配置檢視",
       simViewRec: "推薦配置",
       simViewMaxSave: "金額最大",
@@ -262,23 +282,12 @@ const I18N = {
       simEnergyMin: "Min 尖峰最小日",
       simEnergyMax: "Max 最大日",
       simExtraBenefit: "額外收益",
-      simStage1Kept: "",
       simFinalDevice: "設備",
-      simContractCandidates: "契約候選比較",
       simBenefitSizing: "量體節省",
       simBenefitContract: "契約調整",
       simBenefitReserve: "備轉收入",
       simBenefitTotal: "合計效益",
-      simBillCompareTitle: "電費對照",
-      simCompareReport: "方案比對報告",
-      simCompareBaseline: "原始",
-      simCompareScheme: "新方案",
-      simCompareDelta: "差異",
-      simCompareLoading: "載入電費明細…",
-      simCompareErr: "比對載入失敗",
-      simCompareMonths: "月明細",
-      simCompareNet: "新方案淨成本",
-      simCompareHint: "",
+      simBenefitSplitHint: "地圖為第1層量體節省；合計＝量體＋契約＋備轉。流動電費差異僅流動電費。",
       simBillScenario: "情境",
       simBillBaseline: "原始（無儲能）",
       simBillStage1: "含儲能",
@@ -297,47 +306,16 @@ const I18N = {
       simContractSatHalfPeak: "週六半尖峰",
       simContractOffPeak: "離峰契約",
       simContractNonSummer: "非夏月契約",
-      simCandStatus: "狀態",
-      simCandAdopted: "採用",
-      simCandFeasible: "可行",
-      simCandRejected: "不可行",
-      simCandId: "方案",
-      simCandRegular: "經常 kW",
-      simCandHalfPeak: "半尖峰 ΔkW",
-      simCandOffPeakMove: "離峰替代 kW",
-      simCandFreeBoost: "免費加額 kW",
-      simCandBill: "試算電費",
-      simCandReason: "說明",
-      simCandCurrent: "現行",
-      simCandDayAvg: "尖峰日均",
-      simCandP95: "P95",
-      simCandMax: "最大需量",
-      simRejectExceedPeak: "尖峰超約",
-      simRejectExceedHalfPeak: "半尖峰超約",
-      simRejectExceedOffPeak: "離峰超約",
-      simRejectExceedSat: "週六半尖超約",
-      simRejectOther: "不可行",
-      simReserveSummaryTitle: "即時備轉摘要",
-      simReserveBidRec: "投標推薦",
-      simReserveRolledBack: "已回退（無淨增益）",
-      simReserveViewDetail: "看月結算與事件",
-      simLargeUserDisabled: "經常契約未達 5MW，不可啟用",
-      reserveNoNetGain: "備轉無淨增益，已回退為 0 投標",
       simNoViable: "配置組合內無正向節省；以下為虧損最少參考，非建議裝置。",
-      simSavingsChart: "組合地圖（節省 × 電池）",
-      simChartUnitSavings: "每 1 kWh 電池的期間節省",
+      simSavingsChart: "組合地圖",
+      simUnitSave: "每 kWh",
+      simViewBusy: "計算中…",
       simPcsDailyAvg: "PCS日均使用率",
       simDailyCycle: "SOC日循環",
-      simGridLegendRec: "推薦配置",
-      simGridLegendSave: "金額最大",
-      simGridLegendUtil: "使用率最大",
-      simDispatchCharts: "調度曲線",
-      simDispatchFilter: "圖表篩選",
-      simDispatchFilterHint: "季節／日別／月份套用全部圖表；序列僅熱力與箱型",
+      simDispatchCharts: "視覺化",
       simDispatchMonth: "月份",
       simDispatchMonthAll: "全部",
       simDispatchDayProfile: "單日曲線",
-      simDispatchDayProfileHint: "拉動下方滑桿切換日期",
       simDispatchLoading: "載入調度圖…",
       simDispatchHourlySoc: "時均 SOC",
       simDispatchHourlyPower: "時均功率",
@@ -352,34 +330,27 @@ const I18N = {
       batterySoc: "電池",
       socMin: "SOC 下限（%）",
       socMax: "SOC 上限（%）",
-      chargeEff: "充放電效率（%）",
-      demandBufferKw: "裕度預留（kW）",
-      demandBufferHint: "＞0 啟用；硬上限＝契約 − 裕度",
+      chargeEff: "PCS 充放電效率（%）",
+      bufferPct: "預留比例（%）",
+      demandBufferKw: "防超約（kW）",
+      antiExportKw: "防逆送（kW）",
       autoAdjustContract: "自動調整契約容量",
-      autoAdjustContractHint: "削峰後評估降經常契約",
-      offPeakBoostApplied: "離峰調整 +{kw} kW",
-      offPeakBoostSkipped: "離峰調整未套用",
-      antiExportKw: "負載預留（kW）",
-      antiExportHint: "不逆送",
-      gridReserve: "用電預留",
+      gridReserve: "預留額度",
       scheduleMode: "排程設定",
       scheduleAuto: "自動",
       scheduleManual: "手動",
-      scheduleModeHintAuto: "依邏輯產生推薦排程並據此試算",
-      scheduleModeHintManual: "依你填寫的排程矩陣試算",
       scheduleEdit: "編輯排程",
       scheduleDone: "完成",
       scheduleViewRec: "檢視推薦",
-      scheduleUseAsManual: "套用為手動",
+      scheduleViewPower: "檢視實際功率",
       scheduleRecPending: "試算後顯示推薦排程",
       touRecTitle: "推薦目標 SOC 排程",
-      touHalfpeakOn: "夏半尖峰預放 · 保留 SOC {pct}%",
-      touHalfpeakOff: "夏半尖峰預放未啟用（尖峰／晚間可吸收量已足夠）",
+      touPowerTitle: "實際 PCS 功率",
       reserveRecTitle: "推薦投標排程",
-      reserveP5Note: "自動投標取歷史可履約量第 5 百分位（約 95% 事件可達標），接受約 5% 尾端失敗風險，並非保證每一次調度都能通過。",
       reserveViewRec: "檢視推薦矩陣",
       reserveUseAsManual: "改為手動並套用",
       touTargetSoc: "目標 SOC（%）",
+      touActualPower: "實際功率（kW）",
       reserveBidMw: "投標量體（MW）",
       reserveMaxLabel: "投標上限",
       reserveNoContract: "尚未填寫經常契約",
@@ -426,7 +397,7 @@ const I18N = {
       largeUserOblKw: "義務裝置容量",
       largeUserNoContract: "尚未填寫經常契約",
     },
-    common: { voltage: "電壓", tou: "電價方案", needImport: "請先匯入資料", goImport: "去匯入" },
+    common: { voltage: "電壓", tou: "電價方案", needImport: "請先匯入資料", goImport: "前往匯入" },
   },
   en: {
     nav: {
@@ -440,10 +411,12 @@ const I18N = {
       overageNone: "No overage",
       basic: "Basic",
       overage: "Overage",
+      overageTab: "Overage charge",
       energy: "Energy",
       total: "Total",
       annual: "Annualized",
       months: "Monthly bills",
+      monthsTab: "Monthly detail",
       monthCol: "Month",
       subtotal: "Subtotal",
       breakdown: "Bill structure",
@@ -488,34 +461,31 @@ const I18N = {
       sample: "Sample",
       loadSample: "Load",
       expired: "Data expired. Please import again.",
-      needReselect: "The file is not kept after refresh. Select it again, then import.",
-      currentTitle: "Current data",
-      currentLive: "Active",
-      currentExpired: "Expired",
-      currentRows: "{n} rows",
       start: "Start",
       end: "End",
       contracts: "Contract kW",
       range: "Range / plan",
       bill: "Import",
-      rebill: "Recalculate bill",
       clear: "Clear import",
-      cleared: "Import cleared",
       needFile: "Select a file first",
       needDates: "Need start / end (auto-detected on file select)",
       needSchema: "Contract schema not loaded",
+      needRegular: "Regular contract must be greater than 0",
     },
     settings: {
       title: "Settings",
       load: "Reload defaults",
-      previewHint: "Switching here only previews/edits that plan’s defaults; import plan is unchanged",
       energy: "Energy price (NT$/kWh)",
-      demand: "Demand rate (NT$/kW)",
+      demand: "Basic charge (NT$/kW)",
+      tabRates: "Rates",
+      tabTime: "Timeline",
+      tabHolidays: "Holidays",
       na: "N/A",
       summerRange: "Summer range",
-      schedule: "TOU timeline",
-      shared: "Shared",
+      schedule: "Periods",
       holidays: "Holidays",
+      holidayDate: "Date",
+      holidayName: "Name",
       addHoliday: "Add holiday",
       season: "Season",
       day: "Day type",
@@ -548,45 +518,53 @@ const I18N = {
     },
     simulate: {
       title: "Sizing simulation",
-      functions: "Functions (multi-select)",
-      demand: "Demand shaving",
+      demand: "Contract capacity",
       tou: "TOU arbitrage",
       reserve: "Ancillary service",
       backup: "Emergency backup",
       backupReserveKwh: "Reserved energy (kWh)",
-      backupReserveHint: "Deducted from dispatchable energy; optional",
       largeUser: "Large user obligation",
-      run: "Run simulation",
-      simRerun: "Run again",
+      run: "Run sizing",
       simClearResult: "Clear report",
       simExportXlsx: "Export XLSX",
       simExporting: "Exporting…",
       simExportErr: "Export failed",
-      simRunningKeep: "Running…",
-      simResultStale: "Settings changed — report may be outdated. Run again to refresh.",
-      simResultSummary: "Last run",
-      simLastRunRerun: "Re-running — previous result below",
-      simLastRunCleared: "Cleared report shown below",
-      simLastRunDismiss: "Dismiss",
-      simParams: "Sizing params",
+      simResultStale: "Settings changed — report may be outdated. Clear the report, then run sizing again.",
+      simStepParams: "Params",
+      simStepFns: "Functions",
+      simStepConfig: "Sizing",
+      simStepResult: "Result",
+      simNext: "Next",
+      simBack: "Back",
       loading: "Importing…",
       simErr: "Simulation failed",
       simSavings: "Est. savings",
       simSkipped: "Skipped",
       simBatt: "Battery (kWh)",
       simHours: "Hours (h)",
-      simReport: "Sizing report",
+      simReport: "Benefit report",
+      simBenefitBasic: "Basic charge",
+      simBenefitEnergy: "Energy charge",
+      simBenefitOverage: "Overage charge",
+      simBenefitExtra: "Additional benefit",
+      simBenefitBefore: "Original",
+      simBenefitAfter: "With BESS",
+      simBenefitAmount: "Benefit",
+      simBenefitIncrease: "Increase",
+      simBenefitBasicSourceContract: "Contract capacity adjustment",
+      simBenefitBasicSourcePlan: "Tariff plan change",
+      simBenefitBasicSourceBoth: "Tariff and contract adjustment",
+      simBenefitReserveCapacity: "Capacity",
+      simBenefitReservePerformance: "Performance",
+      simBenefitReserveActivation: "Activation energy",
       simKpiBefore: "Original bill",
       simKpiAfter: "Changed bill",
       simPlanChange: "Plan change",
       simScenarioPlan: "Simulate TOU plan",
-      simScenarioPlanHint: "",
       simScenarioContracts: "Simulate contract kW",
-      simPlanSwitchedNote: "Plan changed (baseline = import; after = new plan)",
-      simEnergyTransferHint: "",
-      simEnergyTransferScenarioOnly: "",
       simKwhBefore: "Original (no BESS)",
       simKwhAfter: "Changed (with BESS)",
+      simReportPlan: "Plan",
       simReportBaselineTou: "Baseline plan",
       simReportSimulateTou: "Changed plan",
       simXferSideBefore: "Baseline only",
@@ -596,10 +574,6 @@ const I18N = {
       simKpiBillSave: "Bill savings",
       simKpiReserveIncome: "Reserve income",
       simKpiTotalBenefit: "Total benefit",
-      simStage2Note: "",
-      stage2WarningLower: "Benefit after contract/reserve is much lower than BESS-only — check assumptions",
-      stage2WarningOverage: "Overage worsened after contract cut — reduction may be too aggressive",
-      contractReductionSuggested: "Suggested regular {kw} kW (cut {cut} kW)",
       simKpiSize: "Recommended size",
       simSizingRunning: "Simulating…",
       simEvaluatingExtras: "Evaluating contracts and reserve…",
@@ -613,43 +587,61 @@ const I18N = {
       simSeedSrcCross: "Combo",
       simPeakEssUtil: "Peak ESS utilization",
       simPeakCoverage: "Peak load coverage",
-      simSampleMeta: "{pts} combinations planned (deduped)",
       simSampleMetaDone: "{pts} combinations simulated",
-      simShortlistSummary: "{pcs} PCS × {batt} batteries → {pts} unique combos",
-      simShortlistRange: "PCS {pcsMin}–{pcsMax} kW · battery {battMin}–{battMax} kWh",
+      simShortlistSummary: "{pts} · PCS {pcsMin}–{pcsMax} kW · battery {battMin}–{battMax} kWh",
       simStrategyChange: "Change strategy",
-      simStrategy: "Sizing strategy",
+      simSizingMode: "Run mode",
+      simSizingModeGrid: "Cross",
+      simSizingModeSingle: "Specify",
+      simManualPcs: "PCS (kW)",
+      simManualBatt: "Battery (kWh)",
+      simNeedManual: "Enter a PCS and battery greater than 0",
       simPowerSeeds: "Power-facing",
       simEnergySeedsAuto: "Energy-facing",
-      simShortlistPreview: "Candidates",
-      simShortlistEmpty: "No candidates yet — pick PCS (power) and battery (energy) to cross-combine",
-      simFnStatusTitle: "",
       simStatusOn: "On",
       simStatusOff: "Off",
       simStatusSkip: "N/A",
       simStatusPending: "Pending",
       simStatusRolled: "Rolled back",
       simStatusAdopted: "Adopted",
-      simReasonRec: "",
-      simReasonMaxSave: "Highest period savings",
-      simReasonMaxUtil: "Highest savings per kWh",
-      simWhyTitle: "Why this pick",
-      simWhyExtrasNote: "",
+      simStatusUnchanged: "Unchanged",
+      simFeatureResults: "Function results",
+      simFeatureDemand: "Contract capacity",
+      simFeatureBackup: "Backup",
+      simFeatureReserve: "Reserve",
+      simMetricMode: "Mode",
+      simMetricBuffer: "Demand buffer",
+      simMetricRegular: "Adopted regular contract",
+      simMetricReducible: "Reducible",
+      simMetricPeakMax: "Peak max",
+      simMetricHalfPeakDelta: "Half-peak top-up",
+      simMetricOffPeakReplace: "Off-peak top-up",
+      simMetricBackup: "Backup reserve",
+      simMetricSocMin: "Effective SOC floor",
+      simMetricReserveIncome: "Reserve income",
+      simMetricBenefit: "Benefit",
+      simReasonDemandBuffer: "Shaves demand against the contract ceiling and buffer.",
+      simReasonContractNoGain: "The rule proposal does not lower the period bill; current contract retained.",
+      simReasonContractRuleAdopted: "The rule proposal lowers the period bill after re-simulation and was adopted.",
+      simContractFnHint: "Auto-adjust contract capacity.",
+      simContractCurrent: "Current contract",
+      simContractFinal: "Recommended change",
+      simContractAllowance: "Allowance",
+      simContractPending: "Evaluating contract capacity and period top-ups from peak max…",
+      simReasonSocFloor: "Reserves backup energy by raising the effective SOC floor.",
+      simReasonAutoBid: "Bid derived from available PCS and SOC headroom.",
+      simReasonManualBid: "Uses the user-defined bid schedule.",
+      simReasonNoNetGain: "No net reserve gain; bid rolled back to zero.",
       simMapAxisPcs: "PCS (kW)",
       simMapAxisBatt: "Battery (kWh)",
       simMapAxisSave: "Period savings",
-      simMapLegendSize: "Larger = more PCS kW",
-      simMapLegendColor: "Brighter = higher PCS util",
-      simMapLegendMarks: "Green = recommended · Gold = max $ · Purple = util",
-      simMapClickHint: "",
       simMapBest: "Best pick",
-      simCapexNote: "",
       simOtherPlans: "Other options",
-      simBattBenefit: "Period savings per 1 kWh battery",
       simChartPcsUtil: "PCS utilization (%)",
       simChartPeriodSave: "Period savings",
       simChartMarkBatt: "Per-kWh benefit",
       simBillSizingOnly: "With BESS",
+      simBillAfterBess: "Bill after BESS",
       simBillWithContract: "With contract adjust",
       simBillWithReserve: "With reserve",
       simDispatchSizing: "BESS dispatch only",
@@ -664,20 +656,20 @@ const I18N = {
       simStrategyP90: "P90 robust",
       simStrategyUnavailable: "Unavailable",
       simIncludeHalfPeak: "Include half-peak",
-      simIncludeHalfPeakHint: "",
-      simIncludeHalfOn: "On",
       simIncludeHalfOff: "Off",
-      simRecSchedules: "Auto recommended schedules",
+      simRecSchedules: "Schedule",
       simRecTou: "TOU target SOC",
       simRecReserve: "Reserve bids",
       simEnergyTransfer: "Energy shift",
       simKwhDelta: "Δ kWh",
       simKwhDeltaPct: "Δ %",
+      simXferAmount: "Amount Δ",
+      simXferItemAmount: "Amount",
+      simXferEffective: "Effective transfer",
+      simXferEnergy: "Energy difference",
       simGridFold: "Combination trials",
       simGridFoldOpen: "Expand",
-      simGridFoldClose: "Collapse",
       simTwoCycle: "Two-cycle",
-      simBillCompare: "Bill comparison",
       simViewPanel: "Configuration view",
       simViewRec: "Recommended",
       simViewMaxSave: "Max savings",
@@ -687,23 +679,12 @@ const I18N = {
       simEnergyMin: "Min lightest peak day",
       simEnergyMax: "Max day",
       simExtraBenefit: "Extra benefit",
-      simStage1Kept: "",
       simFinalDevice: "Device",
-      simContractCandidates: "Contract candidates",
       simBenefitSizing: "Sizing savings",
       simBenefitContract: "Contract adjustment",
       simBenefitReserve: "Reserve income",
       simBenefitTotal: "Total benefit",
-      simBillCompareTitle: "Bill comparison",
-      simCompareReport: "Scheme compare",
-      simCompareBaseline: "Baseline",
-      simCompareScheme: "Scheme",
-      simCompareDelta: "Delta",
-      simCompareLoading: "Loading bill detail…",
-      simCompareErr: "Compare failed to load",
-      simCompareMonths: "Monthly detail",
-      simCompareNet: "Scheme net cost",
-      simCompareHint: "",
+      simBenefitSplitHint: "Map uses Stage-1 sizing savings; total = sizing + contract + reserve. Energy-transfer delta is energy charge only.",
       simBillScenario: "Scenario",
       simBillBaseline: "Baseline (no BESS)",
       simBillStage1: "With BESS",
@@ -722,49 +703,17 @@ const I18N = {
       simContractSatHalfPeak: "Sat. half-peak",
       simContractOffPeak: "Off-peak",
       simContractNonSummer: "Non-summer",
-      simCandStatus: "Status",
-      simCandAdopted: "Adopted",
-      simCandFeasible: "Feasible",
-      simCandRejected: "Rejected",
-      simCandId: "Option",
-      simCandRegular: "Regular kW",
-      simCandHalfPeak: "Half-peak ΔkW",
-      simCandOffPeakMove: "Off-peak replace kW",
-      simCandFreeBoost: "Free boost kW",
-      simCandBill: "Bill",
-      simCandReason: "Note",
-      simCandCurrent: "Current",
-      simCandDayAvg: "Peak-day avg",
-      simCandP95: "P95",
-      simCandMax: "Max demand",
-      simRejectExceedPeak: "Peak exceed",
-      simRejectExceedHalfPeak: "Half-peak exceed",
-      simRejectExceedOffPeak: "Off-peak exceed",
-      simRejectExceedSat: "Sat half-peak exceed",
-      simRejectOther: "Infeasible",
-      simReserveSummaryTitle: "Reserve summary",
-      simReserveBidRec: "Bid recommendation",
-      simReserveRolledBack: "Rolled back (no net gain)",
-      simReserveViewDetail: "Monthly & events",
-      simLargeUserDisabled: "Regular contract below 5 MW — not eligible",
-      reserveNoNetGain: "Reserve has no net gain; rolled back to 0 bid",
-      simGridLegendRec: "Recommended",
-      simGridLegendSave: "Max savings",
-      simGridLegendUtil: "Max utilization",
       simTagBest: "Max savings",
       simNoViable: "No positive savings in combinations; least-loss reference only — not a sizing recommendation.",
-      simSavingsChart: "Combination map (savings × battery)",
-      simChartUnitSavings: "Period savings per 1 kWh battery",
-      simChartBubbleHint: "",
+      simSavingsChart: "Combination map",
+      simUnitSave: "Per kWh",
+      simViewBusy: "Calculating…",
       simPcsDailyAvg: "PCS daily avg util",
       simDailyCycle: "SOC daily cycle",
-      simDispatchCharts: "Dispatch curves",
-      simDispatchFilter: "Chart filters",
-      simDispatchFilterHint: "Season / day / month apply to all charts; series is for heatmap & box only",
+      simDispatchCharts: "Charts",
       simDispatchMonth: "Month",
       simDispatchMonthAll: "All",
       simDispatchDayProfile: "Single-day curve",
-      simDispatchDayProfileHint: "Drag the slider to change date",
       simDispatchLoading: "Loading dispatch charts…",
       simDispatchHourlySoc: "Hourly mean SOC",
       simDispatchHourlyPower: "Hourly mean power",
@@ -779,34 +728,27 @@ const I18N = {
       batterySoc: "Battery",
       socMin: "SOC min (%)",
       socMax: "SOC max (%)",
-      chargeEff: "Charge/discharge efficiency (%)",
-      demandBufferKw: "Headroom (kW)",
-      demandBufferHint: ">0 enables; hard cap = contract − buffer",
+      chargeEff: "PCS charge/discharge efficiency (%)",
+      bufferPct: "Reserve ratio (%)",
+      demandBufferKw: "Anti-overage (kW)",
+      antiExportKw: "Anti-export (kW)",
       autoAdjustContract: "Auto-adjust contract capacity",
-      autoAdjustContractHint: "After peak-shave, evaluate cutting regular contract",
-      offPeakBoostApplied: "Off-peak +{kw} kW",
-      offPeakBoostSkipped: "Off-peak boost not applied",
-      antiExportKw: "Load reserve (kW)",
-      antiExportHint: "No reverse export",
-      gridReserve: "Site reserve",
+      gridReserve: "Reserve allowance",
       scheduleMode: "Schedule",
       scheduleAuto: "Auto",
       scheduleManual: "Manual",
-      scheduleModeHintAuto: "Build a recommended schedule from logic and run with it",
-      scheduleModeHintManual: "Run with the matrix you entered",
       scheduleEdit: "Edit schedule",
       scheduleDone: "Done",
       scheduleViewRec: "View recommendation",
-      scheduleUseAsManual: "Apply as manual",
+      scheduleViewPower: "View actual power",
       scheduleRecPending: "Recommendation appears after you run sizing",
       touRecTitle: "Recommended target SOC schedule",
-      touHalfpeakOn: "Summer half-peak pre-discharge · keep SOC {pct}%",
-      touHalfpeakOff: "Summer half-peak pre-discharge off (peak/evening can absorb usable energy)",
+      touPowerTitle: "Actual PCS power",
       reserveRecTitle: "Recommended bid schedule",
-      reserveP5Note: "Auto bids use the 5th percentile of historical deliverable capacity (~95% of events pass). About 5% tail risk remains — not a guarantee for every dispatch.",
       reserveViewRec: "View recommended matrix",
       reserveUseAsManual: "Switch to manual & apply",
       touTargetSoc: "Target SOC (%)",
+      touActualPower: "Actual power (kW)",
       reserveBidMw: "Bid quantity (MW)",
       reserveMaxLabel: "Bid max",
       reserveNoContract: "No regular contract",
@@ -860,21 +802,24 @@ const I18N = {
 const LOCALE_KEY = "btm_optimize-locale";
 const SESSION_KEY = "btm_optimize-session-v5";
 
-/** 與 backend/app/data/simulate_defaults.json 對齊；開機即可用，不依賴 API 回來後再灌。 */
+/** 開機占位，數字須與 simulate_defaults.json 一致；設定 API 回來後以 JSON 為準。 */
 const BUILTIN_SIMULATE_DEFAULTS = Object.freeze({
   simulateTou: "ThreeStage",
+  sizingMode: "grid",
+  manualPcsKw: 0,
+  manualBattKwh: 0,
   sizingStrategies: ["p50", "p90", "max", "two_cycle"],
   sizingEnergySeeds: ["min", "p50", "p90", "max"],
-  autoAdjustOffPeakContract: false,
   evaluateContractReduction: false,
-  demandBufferKw: 10,
-  antiExportKw: 10,
+  bufferPct: 3,
+  demandBufferKw: 0,
+  antiExportKw: 0,
   backupReserveKwh: 0,
   touScheduleMode: "auto",
   reserveScheduleMode: "auto",
   reserveCapacityPrice: 200,
   reservePerformancePrice: 100,
-  reserveEnergyPrice: 5000,
+  reserveEnergyPrice: 4000,
   reserveMonthlyDispatchCount: 2,
   largeUserRatio: 0.1,
   largeUserPowerRatio: 0.8,
@@ -980,6 +925,75 @@ function makeSeasonMatrix(factory) {
   return { summer: makeDayMatrix(factory), non_summer: makeDayMatrix(factory) };
 }
 
+/** 熱力 day_kind → TOU 矩陣日別（假日／週日走 sunday 列）。 */
+function scheduleDayFromHeatmapKind(kind) {
+  if (kind === "holiday") return "sunday";
+  if (kind === "saturday") return "saturday";
+  return "weekday";
+}
+
+/**
+ * 將 ess_kw 熱力（15 分）聚合成與目標 SOC 同形狀的季節×日別×時段平均功率。
+ * ponytail: 槽內／跨日取 mean；若要 P50／尖峰功率另開矩陣。
+ */
+function aggregateEssKwToTouMatrix(essHeatmap, slotMinutes) {
+  const step = Math.max(1, Number(slotMinutes) || 60);
+  const n = Math.round((24 * 60) / step);
+  const perSlot = Math.max(1, Math.round(step / 15));
+  const out = makeSeasonMatrix(() => Array(n).fill(null));
+  const buckets = {
+    summer: { weekday: Array.from({ length: n }, () => []), saturday: Array.from({ length: n }, () => []), sunday: Array.from({ length: n }, () => []) },
+    non_summer: { weekday: Array.from({ length: n }, () => []), saturday: Array.from({ length: n }, () => []), sunday: Array.from({ length: n }, () => []) },
+  };
+  const dates = (essHeatmap && essHeatmap.dates) || [];
+  const values = (essHeatmap && essHeatmap.values) || [];
+  const meta = (essHeatmap && essHeatmap.date_meta) || {};
+  dates.forEach((d, di) => {
+    const m = meta[d] || {};
+    const season = m.season === "non_summer" ? "non_summer" : (m.season === "summer" ? "summer" : null);
+    if (!season) return;
+    const day = scheduleDayFromHeatmapKind(m.day_kind);
+    const row = values[di] || [];
+    for (let slot = 0; slot < n; slot++) {
+      const i0 = slot * perSlot;
+      const i1 = Math.min(row.length, i0 + perSlot);
+      for (let i = i0; i < i1; i++) {
+        const v = row[i];
+        if (v == null || !Number.isFinite(Number(v))) continue;
+        buckets[season][day][slot].push(Number(v));
+      }
+    }
+  });
+  for (const season of ["summer", "non_summer"]) {
+    for (const day of ["weekday", "saturday", "sunday"]) {
+      out[season][day] = buckets[season][day].map((arr) => {
+        if (!arr.length) return null;
+        const mean = arr.reduce((a, b) => a + b, 0) / arr.length;
+        return Math.round(mean * 10) / 10;
+      });
+    }
+  }
+    return out;
+  }
+
+function simPcsPowerMatrixCacheKey(res, slotMinutes) {
+  const row = simViewRow(res);
+  const base = simChartCacheKey(row) || simRowChartKey(row);
+  if (!base) return null;
+  return `${base}|${slotMinutes}|${simViewContext || "sizing"}`;
+}
+
+function simPcsPowerMatrixForView(res, slotMinutes) {
+  const key = simPcsPowerMatrixCacheKey(res, slotMinutes);
+  if (key && simPcsPowerMatrixCache[key]) return simPcsPowerMatrixCache[key];
+  const dc = simDispatchChartsForKey(res);
+  const ess = dc && dc.heatmap && dc.heatmap.ess_kw;
+  if (!ess) return null;
+  const matrix = aggregateEssKwToTouMatrix(ess, slotMinutes);
+  if (key) simPcsPowerMatrixCache[key] = matrix;
+  return matrix;
+}
+
 /** 對齊 step 槽數；長度不符則重設為預設。 */
 function ensureSlots(arr, n, fill) {
   if (Array.isArray(arr) && arr.length === n) return arr.slice();
@@ -1008,62 +1022,6 @@ function clamp01(v, fallback) {
   return Number.isFinite(n) ? Math.max(0, Math.min(1, n)) : fallback;
 }
 
-function activeEnergyPrices(season) {
-  const v = session.voltage;
-  const tou = activeSimulateTou();
-  if (!session.rates || !v || !tou) return null;
-  const row = session.rates[v] && session.rates[v][tou];
-  return row && row.prices && row.prices[season] ? row.prices[season] : null;
-}
-
-/** 價差是否蓋過 η² 往返損耗（對齊後端 worth_arbitrage）。 */
-function worthArbitrage(pHi, pLo, chargeEff) {
-  const hi = Number(pHi);
-  const lo = Number(pLo);
-  const eta = Number(chargeEff);
-  if (!(hi > 0) || !(lo > 0) || !(eta > 0)) return false;
-  return hi / lo >= 1 / (eta * eta);
-}
-
-/** 時段地圖：同日下一個不同時段，或跨日首段。 */
-function nextPeriodInMap(map, season, day, slot) {
-  if (!map || !map[season] || !map[season][day]) return null;
-  const row = map[season][day];
-  const cur = row[slot];
-  for (let j = slot + 1; j < row.length; j++) {
-    if (row[j] != null && row[j] !== cur) return row[j];
-  }
-  const nextDay = { weekday: "weekday", saturday: "sunday", sunday: "weekday" }[day];
-  const nrow = (map[season] && map[season][nextDay]) || [];
-  for (let j = 0; j < nrow.length; j++) {
-    if (nrow[j] != null) return nrow[j];
-  }
-  return null;
-}
-
-/**
- * auto／手動種子目標 SOC%：
- * 最高→0、最低→100（須過效率門檻）；中價僅當下一相鄰時段更貴且過門檻→100；否則 null=維持。
- */
-function targetSocPct(season, period, nextPeriod, chargeEff) {
-  if (period == null || season == null) return null;
-  const seasonPrices = activeEnergyPrices(season);
-  if (!seasonPrices || seasonPrices[period] == null) return null;
-  const vals = Object.values(seasonPrices).map(Number).filter((n) => Number.isFinite(n));
-  if (!vals.length) return null;
-  const pMin = Math.min(...vals);
-  const pMax = Math.max(...vals);
-  if (pMax <= pMin) return null;
-  const eta = chargeEff != null ? Number(chargeEff) : Number(session.simulate && session.simulate.chargeEff) || 0.85;
-  const price = Number(seasonPrices[period]);
-  if (price >= pMax) return worthArbitrage(pMax, pMin, eta) ? 0 : null;
-  if (price <= pMin) return worthArbitrage(pMax, pMin, eta) ? 100 : null;
-  if (!nextPeriod || seasonPrices[nextPeriod] == null) return null;
-  const nextPrice = Number(seasonPrices[nextPeriod]);
-  if (nextPrice > price && worthArbitrage(nextPrice, price, eta)) return 100;
-  return null;
-}
-
 function baseSimulateTemplate() {
   const d = { ...BUILTIN_SIMULATE_DEFAULTS, ...simulateDefaults };
   const tou = TOU_OPTIONS.includes(d.simulateTou) ? d.simulateTou : "ThreeStage";
@@ -1084,6 +1042,22 @@ function pctDisplay(v) {
   // session 0–1 → 表單 %
   const n = Number(v);
   return Number.isFinite(n) ? Math.round(n * 1000) / 10 : 0;
+}
+
+function suggestedBufferKw(sim, contractValues) {
+  const bag = (sim && sim.scenarioContracts) || {};
+  const cv = contractValues || {};
+  const reg = Number(bag.regular_kw || cv.regular_kw || 0);
+  const pct = Math.max(0, Number(sim && sim.bufferPct) || 0);
+  return ceilToStep(Math.max(0, reg) * pct / 100);
+}
+
+/** 對齊後端 quantize.ceil_to_step（預設步進 10）。 */
+function ceilToStep(x, step = 10) {
+  const v = Number(x);
+  const s = Number(step);
+  if (!(v > 0) || !(s > 0)) return 0;
+  return Math.ceil(v / s - 1e-12) * s;
 }
 
 function _finiteOr(baseVal, raw) {
@@ -1123,18 +1097,31 @@ function normalizeSimulate(raw) {
   sim.socMin = lo;
   sim.socMax = hi;
   {
-    // 契約容量 tab（demand）與自動調整契約連動：同開同關
-    const on = !!(sim.autoAdjustOffPeakContract || sim.evaluateContractReduction)
-      || (sim.functions || []).includes("demand");
-    sim.autoAdjustOffPeakContract = on;
+    // demand 功能＝自動調整契約容量；防超約是參數 demandBufferKw
+    const on = (sim.functions || []).includes("demand")
+      || !!sim.evaluateContractReduction;
     sim.evaluateContractReduction = on;
+    delete sim.autoAdjustOffPeakContract;
     const rest = (sim.functions || []).filter((f) => f !== "tou" && f !== "demand");
     sim.functions = on ? ["tou", ...rest, "demand"] : ["tou", ...rest];
   }
 
   sim.backupReserveKwh = Math.max(0, _finiteOr(base.backupReserveKwh, sim.backupReserveKwh));
-  sim.demandBufferKw = Math.max(0, _finiteOr(base.demandBufferKw, sim.demandBufferKw));
-  sim.antiExportKw = Math.max(0, _finiteOr(base.antiExportKw, sim.antiExportKw));
+  sim.bufferPct = Math.max(0, Math.min(100, _finiteOr(base.bufferPct, sim.bufferPct)));
+  {
+    const sug = suggestedBufferKw(sim);
+    // 舊 session 無新欄：用契約×比例建議值；有填也向上取 10
+    if (!Object.prototype.hasOwnProperty.call(src, "demandBufferKw")) {
+      sim.demandBufferKw = sug;
+    } else {
+      sim.demandBufferKw = ceilToStep(Math.max(0, _finiteOr(sug, sim.demandBufferKw)));
+    }
+    if (!Object.prototype.hasOwnProperty.call(src, "antiExportKw")) {
+      sim.antiExportKw = sug;
+    } else {
+      sim.antiExportKw = ceilToStep(Math.max(0, _finiteOr(sug, sim.antiExportKw)));
+    }
+  }
   sim.reserveCapacityPrice = Math.max(0, _finiteOr(base.reserveCapacityPrice, sim.reserveCapacityPrice));
   sim.reservePerformancePrice = Math.max(0, _finiteOr(base.reservePerformancePrice, sim.reservePerformancePrice));
   sim.reserveEnergyPrice = Math.max(0, _finiteOr(base.reserveEnergyPrice, sim.reserveEnergyPrice));
@@ -1145,6 +1132,9 @@ function normalizeSimulate(raw) {
   sim.largeUserRatio = Math.max(0, Math.min(1, _finiteOr(base.largeUserRatio, sim.largeUserRatio)));
   sim.largeUserPowerRatio = Math.max(0, Math.min(1, _finiteOr(base.largeUserPowerRatio, sim.largeUserPowerRatio)));
 
+  if (sim.sizingMode !== "single" && sim.sizingMode !== "grid") sim.sizingMode = "grid";
+  sim.manualPcsKw = Math.max(0, _finiteOr(0, sim.manualPcsKw));
+  sim.manualBattKwh = Math.max(0, _finiteOr(0, sim.manualBattKwh));
   if (!["auto", "manual"].includes(sim.touScheduleMode)) sim.touScheduleMode = "auto";
   if (!["auto", "manual"].includes(sim.reserveScheduleMode)) sim.reserveScheduleMode = "auto";
   if (!Object.prototype.hasOwnProperty.call(src, "sizingStrategies")) {
@@ -1171,12 +1161,19 @@ function normalizeSimulate(raw) {
   } else {
     sim.includeHalfPeak = false;
   }
+  if (src.wizardStep === 2 || src.wizardStep === 3 || ["params", "fns", "config", "result"].includes(src.wizardStep)) {
+    sim.wizardStep = src.wizardStep;
+  }
+  if (sim.wizardStep === 2) sim.wizardStep = "config";
+  else if (sim.wizardStep === 3) sim.wizardStep = "result";
+  else if (!["params", "fns", "config", "result"].includes(sim.wizardStep)) sim.wizardStep = "fns";
   return sim;
 }
 
 const session = {
   file: null,
   fileLabel: "",
+  fileSource: "",
   start: "",
   end: "",
   voltage: "HV",
@@ -1197,6 +1194,7 @@ const session = {
   samples: [],
   importId: null,
   importRowCount: null,
+  simDefaultsStamp: 0,
   simulate: normalizeSimulate({}),
   _settingsLoaded: false,
 };
@@ -1205,6 +1203,7 @@ function persistSession() {
   try {
     sessionStorage.setItem(SESSION_KEY, JSON.stringify({
       fileLabel: session.fileLabel,
+      fileSource: session.fileSource,
       start: session.start,
       end: session.end,
       voltage: session.voltage,
@@ -1223,6 +1222,7 @@ function persistSession() {
       simulateResultKey: session.simulateResultKey,
       importId: session.importId,
       importRowCount: session.importRowCount,
+      simDefaultsStamp: session.simDefaultsStamp || 0,
       simulate: session.simulate,
     }));
   } catch { /* quota */ }
@@ -1279,6 +1279,12 @@ function syncUrl(route, replace) {
 function go(route, options = {}) {
   syncUrl(route, !!options.replace);
   renderPage(options);
+}
+
+function escapeHtml(s) {
+  return String(s ?? "").replace(/[&<>"']/g, (c) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+  }[c]));
 }
 
 function fmt(n, digits = 0) {
@@ -1361,7 +1367,6 @@ async function probeImport() {
 }
 
 function redirectImportExpired() {
-  session._importNotice = t("import.expired");
   if (parseRoute() === ROUTES.IMPORT) {
     renderPage({ animate: false, preserveScroll: true });
   } else {
@@ -1379,6 +1384,24 @@ function isImportExpiredError(err) {
   return String(err && err.message ? err.message : err) === t("import.expired");
 }
 
+/** 清掉畫面上的檔案與區間，回到還沒選檔。 */
+function forgetPickedFile() {
+  session.file = null;
+  session.fileLabel = "";
+  session.fileSource = "";
+  session.start = "";
+  session.end = "";
+  session.contractValues = {};
+  const upload = document.getElementById("upload") || importFileHold.querySelector("#upload");
+  if (upload) upload.value = "";
+}
+
+/** 重新整理後 File 不在：沒有匯入、也沒有過期結果時，不要留著看起來還能直接匯入的選擇。 */
+function dropUnusableSelection() {
+  if (session.file || session.importId || currentDataMode() === "expired") return;
+  forgetPickedFile();
+}
+
 /** 清除本次匯入結果（前端 session + 後端暫存）；保留已選檔與契約欄位。 */
 async function clearImportedData() {
   const iid = session.importId;
@@ -1394,7 +1417,7 @@ async function clearImportedData() {
   session.simulateError = null;
   session.simulateResultKey = null;
   session.lastCharts = null;
-  clearSimCompareBill();
+  clearSimAuxCaches();
   session.billError = null;
   session.chartsError = null;
   sizingDiagnosis = null;
@@ -1403,8 +1426,6 @@ async function clearImportedData() {
   simulateJob += 1;
   simulateFetch = null;
   simulateSampleFetch = null;
-  simPinnedRun = null;
-  simDismissedSnapshot = null;
   simDispatchChartKey = null;
   simViewMode = "recommended";
   simViewContext = "sizing";
@@ -1433,6 +1454,51 @@ function appendOverrides(fd) {
   if (session.schedule) fd.append("schedule", JSON.stringify(session.schedule));
   if (session.holidays) fd.append("holidays", JSON.stringify(session.holidays));
 }
+
+/** 與後端 SIM_UI_ONLY_KEYS 對齊：純 UI，不進指紋／API payload。 */
+const SIM_UI_ONLY_KEYS = ["wizardStep", "detailTab", "seededImportKey", "scenarioByTou"];
+
+/** 試算 API 用 simulate（去掉導覽欄）。 */
+function simulateApiPayload(sim) {
+  const src = sim && typeof sim === "object" ? sim : (session.simulate || {});
+  const out = { ...src };
+  for (const k of SIM_UI_ONLY_KEYS) delete out[k];
+  return out;
+}
+
+function simulateApiJson(sim) {
+  return JSON.stringify(simulateApiPayload(sim));
+}
+
+/**
+ * 組試算 FormData：import＋契約＋simulate＋overrides（＋可選 stage1／量體／scheme）。
+ * @returns {FormData|null} 缺契約 schema 時回 null
+ */
+function buildSimulateFormData({
+  simulateJson,
+  stage1Key,
+  pcsKw,
+  battKwh,
+  schemeContracts,
+  contractsOverride,
+} = {}) {
+  if (!session.importId) return null;
+  const fd = new FormData();
+  fd.append("import_id", session.importId);
+  if (!appendSimulateContractFields(fd, contractsOverride)) return null;
+  fd.append("simulate", simulateJson != null ? simulateJson : simulateApiJson());
+  appendOverrides(fd);
+  if (stage1Key) fd.append("stage1_key", String(stage1Key));
+  if (pcsKw != null && battKwh != null) {
+    fd.append("pcs_kw", String(pcsKw));
+    fd.append("batt_kwh", String(battKwh));
+  }
+  if (schemeContracts) fd.append("scheme_contracts", JSON.stringify(schemeContracts));
+  return fd;
+}
+
+/** 本輪 size→full 凍結的 simulate JSON（略過 UI 欄）。 */
+let simFrozenPayload = null;
 
 function currentSchema() {
   return session.schemas && session.schemas[session.tou];
@@ -1511,11 +1577,10 @@ function headerHtml(titleKey, extra = "", descKey = "") {
 /** 各頁共用：請先匯入資料 */
 function emptyImportHtml({ message, err = false, id = "" } = {}) {
   const idAttr = id ? ` id="${id}"` : "";
-  const expired = !session.importId && !!session.fileLabel;
-  const msg = message || (expired ? t("import.expired") : t("common.needImport"));
+  const msg = message || t("common.needImport");
   return `<section class="btm-card hud-panel hud-frame empty-import"${idAttr}>
     <div class="empty-import__icon" aria-hidden="true"><i class="fa-solid fa-file-import"></i></div>
-    <p class="empty-import__text${err || expired ? " btm-meta--err" : ""}">${msg}</p>
+    <p class="empty-import__text${err ? " btm-meta--err" : ""}">${msg}</p>
     <div class="empty-import__action">
       <a class="btm-btn btm-btn--primary" href="/import">${t("common.goImport")}</a>
     </div>
@@ -1533,7 +1598,7 @@ function busyBlockHtml(msg) {
 /** 整頁計算中 */
 function pageBusyHtml(titleKey, msgKey) {
   return `<div class="btm-page">
-    ${headerHtml(titleKey)}
+    ${pageHeader(titleKey)}
     <section class="btm-card hud-panel hud-frame page-busy" role="status" aria-live="polite">
       <div class="page-busy__icon" aria-hidden="true"><i class="fa-solid fa-spinner fa-spin"></i></div>
       <p class="page-busy__text">${t(msgKey)}</p>
@@ -1555,55 +1620,58 @@ function routeBusyHtml(route) {
   return null;
 }
 
-function metaChipsHtml() {
-  const src = session.lastBill || session.lastCharts || {};
-  const dates = src.start_date && src.end_date
-    ? `${src.start_date} ~ ${src.end_date}`
-    : (session.start && session.end ? `${session.start} ~ ${session.end}` : "");
-  const fileChip = session.fileLabel
-    ? (session.importId
-      ? `<span class="btm-chip btm-chip--on btm-chip--file"><span class="btm-chip__dot" aria-hidden="true"></span>${session.fileLabel}</span>`
-      : `<span class="btm-chip btm-chip--file">${session.fileLabel}</span>`)
-    : "";
-  return `<div class="dash-chips">
-      ${fileChip}
-      ${dates ? `<span class="btm-chip">${dates}</span>` : ""}
-      <span class="btm-chip">${session.voltage} / ${session.tou}</span>
-    </div>`;
+function pageHeader(titleKey) {
+  return headerHtml(titleKey, dataBarHtml());
 }
 
-function importCurrentCardHtml() {
-  const live = !!session.importId;
+function pageStepBar(tabs, active, attr = "data-page-tab") {
+  return `<ol class="sim-steps">${tabs.map((it) => {
+    const cls = ["sim-steps__item"];
+    if (it.id === active) cls.push("sim-steps__item--on");
+    if (it.on === false) cls.push("sim-steps__item--off");
+    const dis = it.on === false ? " disabled" : "";
+    return `<li class="${cls.join(" ")}"><button type="button" ${attr}="${it.id}"${dis}>${it.label}</button></li>`;
+  }).join("")}</ol>`;
+}
+
+function bindPageTabs(current, apply) {
+  document.querySelectorAll("[data-page-tab]").forEach((btn) => {
+    btn.onclick = () => {
+      const id = btn.getAttribute("data-page-tab");
+      if (!id || id === current()) return;
+      apply(id);
+      renderPage({ animate: false, preserveScroll: true });
+    };
+  });
+}
+
+function currentDataMode() {
+  if (session.importId) return "live";
   const hasSnapshot = !!(
     session.lastBill
     || session.lastCharts
     || normalizeSimulateSizeResult(session.lastSimulateSize)
   );
-  const expired = !live && !!session.fileLabel && hasSnapshot;
-  if (!live && !expired) return "";
+  if (session.fileLabel && hasSnapshot) return "expired";
+  return "";
+}
 
+function dataBarHtml() {
+  const mode = currentDataMode();
+  if (!mode) return "";
   const src = session.lastBill || session.lastCharts || {};
   const start = src.start_date || session.start || "";
   const end = src.end_date || session.end || "";
-  const dates = start && end ? `${start} ~ ${end}` : "";
-  const rows = live && session.importRowCount != null
-    ? `<span class="btm-chip">${t("import.currentRows", { n: session.importRowCount })}</span>`
+  const dates = start && end ? `${escapeHtml(start)} ~ ${escapeHtml(end)}` : "";
+  const tone = mode === "live" ? " btm-chip--on" : "";
+  const file = session.fileLabel
+    ? `<span class="btm-chip${tone}">${escapeHtml(session.fileLabel)}</span>`
     : "";
-  const status = live
-    ? `<span class="btm-chip btm-chip--on btm-chip--file"><span class="btm-chip__dot" aria-hidden="true"></span>${t("import.currentLive")}</span>`
-    : `<span class="btm-chip">${t("import.currentExpired")}</span>`;
-
-  return `<section class="btm-card hud-panel hud-frame import-current${expired ? " import-current--expired" : ""}">
-    <h2 class="btm-card__title seetel-title">${t("import.currentTitle")}</h2>
-    <div class="dash-chips import-current__chips">
-      ${status}
-      ${session.fileLabel ? `<span class="btm-chip${live ? " btm-chip--on" : ""}">${session.fileLabel}</span>` : ""}
-      ${dates ? `<span class="btm-chip">${dates}</span>` : ""}
-      <span class="btm-chip">${session.voltage} / ${session.tou}</span>
-      ${rows}
-    </div>
-    ${expired ? `<p class="btm-meta btm-meta--err">${t("import.expired")}</p>` : ""}
-  </section>`;
+  return `<div class="btm-data-bar">
+    ${file}
+    ${dates ? `<span class="btm-chip${tone}">${dates}</span>` : ""}
+    <span class="btm-chip${tone}">${escapeHtml(session.voltage)} / ${escapeHtml(session.tou)}</span>
+  </div>`;
 }
 
 function planSelectsHtml(mode) {
@@ -1635,8 +1703,9 @@ function contractFieldsHtml() {
   return schema.fields
     .map((f) => {
       const v = session.contractValues[f] ?? 0;
+      const min = f === "regular_kw" ? 1 : 0;
       return `<label class="ts-field" data-field="${f}"><span class="ts-field__label">${t("fields." + f)}</span>
-        <input class="ts-input" type="number" id="kw-${f}" min="0" step="1" value="${v}"></label>`;
+        <input class="ts-input" type="number" id="kw-${f}" min="${min}" step="1" value="${v}"></label>`;
     })
     .join("");
 }
@@ -1759,7 +1828,7 @@ function overageRowsFromBill(bill) {
   return ((bill.summary && bill.summary.overage) || []).filter(isOverageRow);
 }
 
-function billSummaryHtml(bill) {
+function billSummaryHtml(bill, only) {
   const summary = bill.summary || {};
   const basic = basicRowsFromBill(bill);
   const overage = overageRowsFromBill(bill);
@@ -1822,10 +1891,7 @@ function billSummaryHtml(bill) {
     </div>`
     : `<p class="btm-empty">${t("dashboard.overageNone")}</p>`;
 
-  return `<section class="btm-card hud-panel hud-frame dash-breakdown">
-    <h2 class="btm-card__title seetel-title">${t("dashboard.breakdown")}</h2>
-    <h3 class="btm-section-title">${t("dashboard.basic")}</h3>
-    <div class="btm-table-wrap btm-table-wrap--tall">
+  const basicTable = `<div class="btm-table-wrap btm-table-wrap--tall">
       <table class="btm-table btm-table--dash">
         <thead><tr>
           <th>${t("dashboard.item")}</th>
@@ -1838,11 +1904,8 @@ function billSummaryHtml(bill) {
           <td class="num"><b>${fmt(bill.basic_total)}</b></td>
         </tr></tfoot>
       </table>
-    </div>
-    <h3 class="btm-section-title">${t("dashboard.overage")}</h3>
-    ${overageBlock}
-    <h3 class="btm-section-title">${t("dashboard.energy")}</h3>
-    <div class="btm-table-wrap btm-table-wrap--tall">
+    </div>`;
+  const energyTable = `<div class="btm-table-wrap btm-table-wrap--tall">
       <table class="btm-table btm-table--dash">
         <thead><tr>
           <th>${t("dashboard.season")}</th>
@@ -1859,7 +1922,19 @@ function billSummaryHtml(bill) {
           <td class="num"><b>${fmt(bill.energy_total)}</b></td>
         </tr></tfoot>
       </table>
-    </div>
+    </div>`;
+  if (only === "basic") return basicTable;
+  if (only === "overage") return overageBlock;
+  if (only === "energy") return energyTable;
+
+  return `<section class="btm-card hud-panel hud-frame dash-breakdown">
+    <h2 class="btm-card__title seetel-title">${t("dashboard.breakdown")}</h2>
+    <h3 class="btm-section-title">${t("dashboard.basic")}</h3>
+    ${basicTable}
+    <h3 class="btm-section-title">${t("dashboard.overage")}</h3>
+    ${overageBlock}
+    <h3 class="btm-section-title">${t("dashboard.energy")}</h3>
+    ${energyTable}
   </section>`;
 }
 
@@ -1869,7 +1944,7 @@ function renderDashboard() {
   const bill = session.lastBill;
   if (!bill) {
     return `<div class="btm-page">
-      ${headerHtml("dashboard.title")}
+      ${pageHeader("dashboard.title")}
       ${emptyImportHtml({
         message: session.billError || undefined,
         err: !!session.billError,
@@ -1877,23 +1952,34 @@ function renderDashboard() {
     </div>`;
   }
   const days = billSpanDays(bill);
+  if (!["basic", "overage", "energy", "months"].includes(dashTab)) dashTab = "basic";
+  const detail = dashTab === "months"
+    ? (billMonthsHtml(bill) || `<p class="btm-empty">${t("dashboard.empty")}</p>`)
+    : billSummaryHtml(bill, dashTab);
   return `<div class="btm-page">
-    ${headerHtml("dashboard.title", metaChipsHtml())}
+    ${pageHeader("dashboard.title")}
     <div class="dash-kpis">
       ${dashKpiHtml(t("dashboard.basic"), bill.basic_total, days)}
       ${dashKpiHtml(t("dashboard.overage"), bill.overage_total, days, " dash-kpi--overage")}
       ${dashKpiHtml(t("dashboard.energy"), bill.energy_total, days, " dash-kpi--energy")}
       ${dashKpiHtml(t("dashboard.total"), bill.total, days, " dash-kpi--total")}
     </div>
-    ${billSummaryHtml(bill)}
+    ${pageStepBar([
+      { id: "basic", label: t("dashboard.basic") },
+      { id: "overage", label: t("dashboard.overageTab") },
+      { id: "energy", label: t("dashboard.energy") },
+      { id: "months", label: t("dashboard.monthsTab") },
+    ], dashTab)}
     <section class="btm-card hud-panel hud-frame">
-      <h2 class="btm-card__title seetel-title">${t("dashboard.months")}</h2>
-      ${billMonthsHtml(bill)}
+      ${detail}
     </section>
   </div>`;
 }
 
 const chartFilter = { season: "all", day: "all", month: "all" };
+let chartTab = "heatmap";
+let dashTab = "basic";
+let settingsTab = "rates";
 let echartsHandles = [];
 let simSavingsChart = null;
 let simDispatchCharts = [];
@@ -1915,32 +2001,29 @@ let billFetch = null;
 let billJob = 0;
 let simulateFetch = null;
 let simulateFullFetch = null;
+/** 串行 /full（點擊與背景預取共用，避免並行互蓋）。 */
+let simulateFullChain = Promise.resolve();
+let simulateFullPrefetchToken = 0;
 let simulateSampleFetch = null;
 let simulateExportFetch = null;
 let simulateJob = 0;
-/** 方案比對完整帳單（記憶體；不寫 sessionStorage） */
-let simCompareBill = null;
-let simCompareKey = null;
-let simCompareFetch = null;
-let simCompareLoadId = 0;
-/** @type {"delta" | "baseline" | "scheme"} */
-let simCompareView = "delta";
+/** @type {Record<string, object>} 實際功率矩陣快取 key = chartKey|slotMin|ctx */
+let simPcsPowerMatrixCache = {};
 let sizingDiagnosis = null;
 let simulateSampleJob = 0;
 /** 匯入後診斷＋樣本就緒才顯示功能／策略區 */
 let simWorkspaceReady = false;
 let simWorkspaceBooting = false;
-/** 重新試算進行中：凍結的上一筆摘要（不寫入 sessionStorage） */
-let simPinnedRun = null;
-/** 清除結果後短暫顯示的摘要卡 */
-let simDismissedSnapshot = null;
-/** @type {null | "tou" | "tou-rec" | "reserve" | "reserve-rec"} 排程矩陣彈窗 */
+/** @type {null | "tou" | "tou-rec" | "tou-power" | "reserve" | "reserve-rec"} 排程矩陣彈窗 */
 let simScheduleModal = null;
 let simScheduleEscBound = false;
 
 function closeScheduleModal({ reread = true } = {}) {
   if (!simScheduleModal) return;
-  if (reread) readSimulateForm();
+  const viewOnly = simScheduleModal === "tou-rec"
+    || simScheduleModal === "tou-power"
+    || simScheduleModal === "reserve-rec";
+  if (reread && !viewOnly) readSimulateForm();
   simScheduleModal = null;
   renderPage({ animate: false, preserveScroll: true });
 }
@@ -2034,33 +2117,26 @@ function renderCharts() {
   if (busy) return busy;
   if (session.chartsError && !session.lastCharts) {
     return `<div class="btm-page">
-      ${headerHtml("charts.title")}
+      ${pageHeader("charts.title")}
       ${emptyImportHtml({ message: session.chartsError, err: true })}
     </div>`;
   }
   if (!session.lastCharts) {
     if (!session.importId) {
-      return `<div class="btm-page">
-        ${headerHtml("charts.title")}
+    return `<div class="btm-page">
+      ${pageHeader("charts.title")}
         ${emptyImportHtml()}
-      </div>`;
-    }
+    </div>`;
+  }
     return pageBusyHtml("charts.title", "charts.loading");
   }
+  if (!["heatmap", "box", "line"].includes(chartTab)) chartTab = "heatmap";
   const sea = chartFilter.season;
   const day = chartFilter.day;
   const mon = chartFilter.month;
   const monthOpts = chartMonthOptions(session.lastCharts, mon);
-  return `<div class="btm-page">
-    ${headerHtml("charts.title", metaChipsHtml())}
-    <section class="btm-card hud-panel hud-frame">
-      <h2 class="btm-card__title seetel-title">${t("charts.heatmap")}</h2>
-      <div class="dash-chart dash-chart--heatmap" id="chart-heatmap"></div>
-    </section>
-    <section class="btm-card hud-panel hud-frame">
-      <div class="btm-section-row">
-        <h2 class="btm-card__title seetel-title">${t("charts.boxplot")}</h2>
-        <div class="chart-filters">
+  const filters = chartTab === "box"
+    ? `<div class="chart-filters">
           <label class="ts-field"><span class="ts-field__label">${t("settings.season")}</span>
             <select class="ts-select" id="chartSeason">
               <option value="all" ${sea === "all" ? "selected" : ""}>${t("charts.seasonAll")}</option>
@@ -2075,13 +2151,20 @@ function renderCharts() {
             </select></label>
           <label class="ts-field"><span class="ts-field__label">${t("charts.month")}</span>
             <select class="ts-select" id="chartMonth">${monthOpts}</select></label>
-        </div>
-      </div>
-      <div class="dash-chart" id="chart-boxplot"></div>
-    </section>
+        </div>`
+    : "";
+  const chartId = chartTab === "box" ? "chart-boxplot" : chartTab === "line" ? "chart-line" : "chart-heatmap";
+  const chartClass = chartTab === "heatmap" ? "dash-chart dash-chart--heatmap" : "dash-chart";
+  return `<div class="btm-page">
+    ${pageHeader("charts.title")}
+    ${pageStepBar([
+      { id: "heatmap", label: t("charts.heatmap") },
+      { id: "box", label: t("charts.boxplot") },
+      { id: "line", label: t("charts.line") },
+    ], chartTab)}
     <section class="btm-card hud-panel hud-frame">
-      <h2 class="btm-card__title seetel-title">${t("charts.line")}</h2>
-      <div class="dash-chart" id="chart-line"></div>
+      ${filters}
+      <div class="${chartClass}" id="${chartId}"></div>
     </section>
   </div>`;
 }
@@ -2106,8 +2189,17 @@ function heatmapOption(data) {
     const m = String((i % 4) * 15).padStart(2, "0");
     return `${h}:${m}`;
   });
-  const vmin = data.kW && data.kW.min != null ? Number(data.kW.min) : 0;
-  const vmax = data.kW && data.kW.max != null ? Number(data.kW.max) : 1;
+  let vmin = Infinity;
+  let vmax = -Infinity;
+  for (const p of points) {
+    const v = p[2];
+    if (v < vmin) vmin = v;
+    if (v > vmax) vmax = v;
+  }
+  if (!Number.isFinite(vmin)) {
+    vmin = 0;
+    vmax = 1;
+  }
   return {
     ...ECHART_NO_ANIM,
     backgroundColor: "transparent",
@@ -2148,7 +2240,12 @@ function heatmapOption(data) {
       textStyle: { color: CHART_AXIS },
       inRange: { color: ["#0b1c28", "#00d4ff", "#fbbf24", "#f87171"] },
     },
-    series: [{ type: "heatmap", data: points }],
+    series: [{
+      type: "heatmap",
+      data: points,
+      progressive: 0,
+      animation: false,
+    }],
   };
 }
 
@@ -2266,10 +2363,24 @@ function boxplotOption(data) {
 }
 
 function lineOption(data) {
-  const ln = data.line || {};
-  const dates = ln.dates || [];
-  const peak = ln.peak_kw || [];
-  const mean = ln.mean_kw || [];
+  const hm = data.heatmap || {};
+  const dates = hm.dates || [];
+  const peak = [];
+  const mean = [];
+  for (const row of hm.values || []) {
+    let mx = -Infinity;
+    let sum = 0;
+    let n = 0;
+    for (const v of row || []) {
+      if (v == null || !Number.isFinite(Number(v))) continue;
+      const x = Number(v);
+      if (x > mx) mx = x;
+      sum += x;
+      n += 1;
+    }
+    peak.push(n ? mx : null);
+    mean.push(n ? sum / n : null);
+  }
   const series = [
     {
       name: t("charts.peak"),
@@ -2316,21 +2427,21 @@ function lineOption(data) {
 
 function bindCharts() {
   if (!session.lastCharts && session.importId) fetchCharts();
+  bindPageTabs(() => chartTab, (id) => { chartTab = id; });
   if (typeof echarts === "undefined" || !session.lastCharts) return;
   const data = session.lastCharts;
-  const hmEl = document.getElementById("chart-heatmap");
-  const boxEl = document.getElementById("chart-boxplot");
-  const lineEl = document.getElementById("chart-line");
-  if (!hmEl || !boxEl || !lineEl) return;
-
-  const hm = echarts.init(hmEl);
-  const box = echarts.init(boxEl);
-  const line = echarts.init(lineEl);
-  hm.setOption(heatmapOption(data));
-  box.setOption(boxplotOption(data));
-  line.setOption(lineOption(data));
-  echartsHandles = [hm, box, line];
-  boxChart = box;
+  const mount = (id, option) => {
+    const el = document.getElementById(id);
+    if (!el) return null;
+    const chart = echarts.init(el);
+    chart.setOption(option);
+    echartsHandles.push(chart);
+    return chart;
+  };
+  mount("chart-heatmap", heatmapOption(data));
+  boxChart = mount("chart-boxplot", boxplotOption(data));
+  mount("chart-line", lineOption(data));
+  if (!echartsHandles.length) return;
 
   const seasonEl = document.getElementById("chartSeason");
   const dayEl = document.getElementById("chartDay");
@@ -2356,13 +2467,20 @@ function bindCharts() {
 
   chartsResize = () => { echartsHandles.forEach((c) => c.resize()); };
   window.addEventListener("resize", chartsResize);
+  requestAnimationFrame(() => { if (chartsResize) chartsResize(); });
 }
 
 function renderImport() {
-  const samples = session.samples.map((f) => `<option value="${f}">${f}</option>`).join("");
+  const pickedSample = session.file && session.fileSource === "sample" ? session.fileLabel : "";
+  const samples = session.samples.map((f) =>
+    `<option value="${escapeHtml(f)}"${f === pickedSample ? " selected" : ""}>${escapeHtml(f)}</option>`
+  ).join("");
+  const ready = !!(session.file && session.fileLabel && session.start && session.end);
+  const showClear = !!session.importId || currentDataMode() === "expired";
+  const clearBtn = `<button type="button" class="btm-btn btm-btn--ghost" id="btnClearImport"${billFetch ? " disabled" : ""}>${t("import.clear")}</button>`;
 
   return `<div class="btm-page">
-    ${headerHtml("import.title")}
+    ${pageHeader("import.title")}
     <section class="btm-card hud-panel hud-frame">
       <div class="clean-import">
         <div class="clean-import__col">
@@ -2383,6 +2501,9 @@ function renderImport() {
           </div>
         </div>
       </div>
+      <p class="btm-meta" id="runMeta"></p>
+      ${showClear && !ready ? `<div class="btm-actions">${clearBtn}</div>` : ""}
+      <div id="importRest"${ready ? "" : " hidden"}>
       <hr class="btm-rule">
       <h3 class="btm-subhead">${t("import.range")}</h3>
       <div class="btm-row">
@@ -2395,14 +2516,12 @@ function renderImport() {
       <h3 class="btm-subhead">${t("import.contracts")}</h3>
       <div class="btm-row" id="contractFields">${contractFieldsHtml()}</div>
       <div class="btm-actions">
-        ${session.importId
-          ? `<button type="button" class="btm-btn btm-btn--ghost" id="btnClearImport"${billFetch ? " disabled" : ""}>${t("import.clear")}</button>
-        <button type="button" class="btm-btn btm-btn--primary" id="btnRebill"${billFetch ? " disabled" : ""}>${t("import.rebill")}</button>`
-          : `<button type="button" class="btm-btn btm-btn--primary" id="btnBill"${billFetch ? " disabled" : ""}>${t("import.bill")}</button>`}
+        ${ready && session.importId
+          ? clearBtn
+          : `<button type="button" class="btm-btn btm-btn--primary" id="btnBill"${billFetch || !(Number(session.contractValues.regular_kw) > 0) ? " disabled" : ""}>${t("import.bill")}</button>`}
       </div>
-      <p class="btm-meta" id="runMeta"></p>
+      </div>
     </section>
-    ${importCurrentCardHtml()}
   </div>`;
 }
 
@@ -2528,10 +2647,15 @@ function energyTableHtml() {
   return html + "</tbody></table>";
 }
 
+function settingsSchema() {
+  /** 設定頁電價／契約欄位：跟 settingsTou，不跟匯入 session.tou。 */
+  return session.schemas && session.schemas[settingsPlanTou()];
+}
+
 function demandKeyApplies(key) {
   const field = DEMAND_CONTRACT_FIELD[key];
   if (!field) return true;
-  const schema = currentSchema();
+  const schema = settingsSchema();
   if (!schema) return true;
   return schema.fields.includes(field);
 }
@@ -2567,6 +2691,7 @@ function summerRangeHtml() {
       <input class="ts-input" type="number" min="1" max="12" id="sr-sm" value="${r.start_month || 5}"></label>
     <label class="ts-field"><span class="ts-field__label">${t("settings.startDay")}</span>
       <input class="ts-input" type="number" min="1" max="31" id="sr-sd" value="${r.start_day || 16}"></label>
+    <span class="btm-split" aria-hidden="true"></span>
     <label class="ts-field"><span class="ts-field__label">${t("settings.endMonth")}</span>
       <input class="ts-input" type="number" min="1" max="12" id="sr-em" value="${r.end_month || 10}"></label>
     <label class="ts-field"><span class="ts-field__label">${t("settings.endDay")}</span>
@@ -2576,8 +2701,8 @@ function summerRangeHtml() {
 
 function holidayTableHtml() {
   const rows = session.holidays || [];
-  let html = `<table class="btm-table btm-edit-table"><thead><tr>
-    <th>date</th><th>name</th><th></th></tr></thead><tbody>`;
+  let html = `<table class="btm-table btm-edit-table btm-holidays"><thead><tr>
+    <th>${t("settings.holidayDate")}</th><th>${t("settings.holidayName")}</th><th></th></tr></thead><tbody>`;
   rows.forEach((h, i) => {
     html += `<tr>
       <td><input class="ts-input" type="date" data-hol-date="${i}" value="${h.date || ""}"></td>
@@ -2589,19 +2714,8 @@ function holidayTableHtml() {
 }
 
 function renderSettings() {
-  return `<div class="btm-page">
-    ${headerHtml("settings.title")}
-    <section class="btm-card hud-panel hud-frame">
-      <div class="btm-toolbar btm-toolbar--fill">
-        ${planSelectsHtml("settings")}
-        <div class="ts-field ts-field--btn">
-          <span class="ts-field__label">&nbsp;</span>
-          <button type="button" class="btm-btn btm-btn--ghost" id="btnLoad">${t("settings.load")}</button>
-            </div>
-          </div>
-      <p class="btm-meta">${t("settings.previewHint")}</p>
-    </section>
-    <div class="btm-pair">
+  if (!["rates", "time", "holidays"].includes(settingsTab)) settingsTab = "rates";
+  const rates = `<div class="btm-pair">
       <section class="btm-card hud-panel hud-frame">
         <h2 class="btm-card__title seetel-title">${t("settings.demand")}</h2>
         <div class="btm-table-wrap btm-table-wrap--tall">${demandTableHtml()}</div>
@@ -2610,10 +2724,17 @@ function renderSettings() {
         <h2 class="btm-card__title seetel-title">${t("settings.energy")}</h2>
         <div class="btm-table-wrap btm-table-wrap--tall">${energyTableHtml()}</div>
       </section>
-            </div>
+    </div>`;
+  const time = `<section class="btm-card hud-panel hud-frame">
+      <h2 class="btm-card__title seetel-title">${t("settings.summerRange")}</h2>
+      ${summerRangeHtml()}
+    </section>
     <section class="btm-card hud-panel hud-frame">
-      <h2 class="btm-card__title seetel-title">${t("settings.schedule")}</h2>
-      <div class="btm-toolbar">
+      <div class="btm-section-row">
+        <h2 class="btm-card__title seetel-title">${t("settings.schedule")}</h2>
+        <p class="btm-legend" id="matrixLegend"></p>
+      </div>
+      <div class="btm-row">
         <label class="ts-field"><span class="ts-field__label">${t("settings.season")}</span>
           <select class="ts-select" id="editSeason">
             <option value="summer">${t("settings.summer")}</option>
@@ -2625,24 +2746,37 @@ function renderSettings() {
             <option value="saturday">saturday</option>
             <option value="sunday">sunday</option>
           </select></label>
-          </div>
+      </div>
+      <hr class="btm-rule">
       <div class="btm-timeline" id="timeline"></div>
-      <p class="btm-meta" id="timelineMeta"></p>
-      <p class="btm-legend" id="matrixLegend"></p>
       <div id="matrix"></div>
-    </section>
-    <section class="btm-card hud-panel hud-frame">
-      <h2 class="btm-card__title seetel-title">${t("settings.shared")}</h2>
-      <h3 class="btm-section-title">${t("settings.summerRange")}</h3>
-      ${summerRangeHtml()}
-      <hr class="btm-rule" />
+    </section>`;
+  const holidays = `<section class="btm-card hud-panel hud-frame">
       <div class="btm-section-row">
-        <h3 class="btm-section-title">${t("settings.holidays")}</h3>
+        <h2 class="btm-card__title seetel-title">${t("settings.holidays")}</h2>
         <button type="button" class="btm-btn btm-btn--ghost" id="btnAddHol">${t("settings.addHoliday")}</button>
-        </div>
+      </div>
       <div class="btm-table-wrap">${holidayTableHtml()}</div>
+    </section>`;
+  const body = settingsTab === "time" ? time : settingsTab === "holidays" ? holidays : rates;
+  return `<div class="btm-page">
+    ${pageHeader("settings.title")}
+    <section class="btm-card hud-panel hud-frame">
+      <div class="btm-toolbar btm-toolbar--fill">
+        ${planSelectsHtml("settings")}
+        <div class="ts-field ts-field--btn">
+          <span class="ts-field__label">&nbsp;</span>
+          <button type="button" class="btm-btn btm-btn--ghost" id="btnLoad">${t("settings.load")}</button>
+        </div>
+      </div>
     </section>
-    </div>`;
+    ${pageStepBar([
+      { id: "rates", label: t("settings.tabRates") },
+      { id: "time", label: t("settings.tabTime") },
+      { id: "holidays", label: t("settings.tabHolidays") },
+    ], settingsTab)}
+    ${body}
+  </div>`;
 }
 
 async function detectDateRange() {
@@ -2658,6 +2792,8 @@ function readContractInputs() {
     const el = document.getElementById("kw-" + f);
     if (el) session.contractValues[f] = Number(el.value || 0);
   }
+  const submit = document.getElementById("btnBill");
+  if (submit) submit.disabled = !!billFetch || !(Number(session.contractValues.regular_kw) > 0);
   persistSession();
 }
 
@@ -2701,6 +2837,10 @@ function setRunMeta(el, msg, err) {
   if (!el) return;
   el.textContent = msg || "";
   el.classList.toggle("btm-meta--err", !!err);
+  if (msg) {
+    el.hidden = false;
+    el.classList.remove("btm-meta--hidden");
+  }
 }
 
 function bindImport() {
@@ -2719,23 +2859,31 @@ function bindImport() {
     renderPage({ animate: false, preserveScroll: true });
   });
 
-  async function afterFile(file, label) {
+  async function afterFile(file, label, source) {
     session.file = file;
     session.fileLabel = label;
+    session.fileSource = source;
     await clearImportedData();
     try {
       const data = await detectDateRange();
       session.start = data.date_min;
       session.end = data.date_max;
+      persistSession();
       renderPage({ animate: false, preserveScroll: true });
+      if (source === "sample") {
+        const upload = document.getElementById("upload");
+        if (upload) upload.value = "";
+      }
     } catch (err) {
-      setRunMeta(runMeta, String(err.message || err), true);
+      const msg = String(err.message || err);
+      renderPage({ animate: false, preserveScroll: true });
+      setRunMeta(document.getElementById("runMeta"), msg, true);
     }
   }
 
   document.getElementById("upload").onchange = (e) => {
     const f = e.target.files[0];
-    if (f) afterFile(f, f.name);
+    if (f) afterFile(f, f.name, "upload");
   };
   document.getElementById("btnSample").onclick = async () => {
     const name = document.getElementById("sample").value;
@@ -2744,7 +2892,7 @@ function bindImport() {
       const r = await fetch("/api/import/samples/" + encodeURIComponent(name));
       if (!r.ok) throw new Error("load failed");
       const blob = await r.blob();
-      await afterFile(new File([blob], name), name);
+      await afterFile(new File([blob], name), name, "sample");
     } catch (err) {
       setRunMeta(runMeta, String(err.message || err), true);
     }
@@ -2754,7 +2902,7 @@ function bindImport() {
     readFormCommon();
     readContractInputs();
     if (!session.file) {
-      setRunMeta(runMeta, session.fileLabel ? t("import.needReselect") : t("import.needFile"), true);
+      setRunMeta(runMeta, t("import.needFile"), true);
       return;
     }
     if (!session.start || !session.end) { setRunMeta(runMeta, t("import.needDates"), true); return; }
@@ -2762,6 +2910,10 @@ function bindImport() {
     if (!schema) { setRunMeta(runMeta, t("import.needSchema"), true); return; }
     const contracts = {};
     for (const f of schema.fields) contracts[f] = Number(session.contractValues[f] || 0);
+    if (!(contracts.regular_kw > 0)) {
+      setRunMeta(runMeta, t("import.needRegular"), true);
+      return;
+    }
     const fdRun = new FormData();
     fdRun.append("file", session.file);
     fdRun.append("voltage_level", session.voltage);
@@ -2823,51 +2975,9 @@ function bindImport() {
   if (btnClear) btnClear.onclick = async () => {
     btnClear.disabled = true;
     await clearImportedData();
+    forgetPickedFile();
+    persistSession();
     renderPage({ animate: false, preserveScroll: true });
-    setRunMeta(document.getElementById("runMeta"), t("import.cleared"), false);
-  };
-
-  const btnRebill = document.getElementById("btnRebill");
-  if (btnRebill) btnRebill.onclick = () => {
-    const runMeta = document.getElementById("runMeta");
-    if (!requireLiveImportOrRedirect()) return;
-    readFormCommon();
-    readContractInputs();
-    const schema = currentSchema();
-    if (!schema) { setRunMeta(runMeta, t("import.needSchema"), true); return; }
-    const contracts = {};
-    for (const f of schema.fields) contracts[f] = Number(session.contractValues[f] || 0);
-    // 重算＝規格更新：依目前方案／step／時段重種功能排程（手動 TOU／備轉會被覆寫為預設）
-    ensureSettingsLoaded().then(() => seedSimulateFromImport(true));
-    const fdBill = new FormData();
-    fdBill.append("import_id", session.importId);
-    fdBill.append("contracts", JSON.stringify(contracts));
-    appendOverrides(fdBill);
-    const id = ++billJob;
-    session.billError = null;
-    billFetch = apiJson("/api/billing/basic", { method: "POST", body: fdBill })
-      .then((bill) => {
-        if (id !== billJob) return;
-        billFetch = null;
-        session.lastBill = bill;
-        persistSession();
-        if (parseRoute() === ROUTES.DASHBOARD) renderPage({ animate: false, preserveScroll: true });
-      })
-      .catch((err) => {
-        if (id !== billJob) return;
-        billFetch = null;
-        session.billError = String(err.message || err);
-        if (isImportExpiredError(err)) {
-          redirectImportExpired();
-          return;
-        }
-        if (parseRoute() === ROUTES.DASHBOARD) renderPage({ animate: false, preserveScroll: true });
-        else setRunMeta(document.getElementById("runMeta"), session.billError, true);
-      })
-      .finally(() => {
-        if (id === billJob) billFetch = null;
-      });
-    go(ROUTES.DASHBOARD);
   };
 }
 
@@ -2881,8 +2991,29 @@ async function ensureSettingsLoaded(opts) {
     if (reloadRates || session.holidays == null) session.holidays = data.holidays;
     if (data.simulate && typeof data.simulate === "object") {
       simulateDefaults = { ...BUILTIN_SIMULATE_DEFAULTS, ...data.simulate };
-      // 補齊缺欄；已有值（含使用者改成 0）保留
-      session.simulate = normalizeSimulate(session.simulate);
+      // 補齊缺欄；畫面上已有的值保留，試算送的是這份，不再回讀預設。
+      // 上一版開機副本：2%／10／50 或 5%＋上下限。只清一次。
+      const prev = session.simulate || {};
+      if (!session.simDefaultsStamp || session.simDefaultsStamp < 2) {
+        if (
+          (Number(prev.bufferPct) === 2
+            && Number(prev.bufferMinKw) === 10
+            && Number(prev.bufferMaxKw) === 50)
+          || (Number(prev.bufferPct) === 5
+            && prev.bufferMinKw != null
+            && prev.bufferMaxKw != null
+            && prev.demandBufferKw == null)
+        ) {
+          delete prev.bufferPct;
+          delete prev.demandBufferKw;
+          delete prev.antiExportKw;
+        }
+        delete prev.bufferMinKw;
+        delete prev.bufferMaxKw;
+        if (Number(prev.reserveEnergyPrice) === 5000) delete prev.reserveEnergyPrice;
+        session.simDefaultsStamp = 2;
+      }
+      session.simulate = normalizeSimulate(prev);
     }
     session._settingsLoaded = true;
     return true;
@@ -2923,8 +3054,7 @@ function writeSummerRange() {
 
 function renderTimeline() {
   const box = document.getElementById("timeline");
-  const meta = document.getElementById("timelineMeta");
-  if (!box || !meta) return;
+  if (!box) return;
   box.innerHTML = "";
   const stepMin = scheduleStep(settingsPlanTou());
   const state = slotsToState(currentSlots());
@@ -2969,8 +3099,6 @@ function renderTimeline() {
     tick.textContent = fmtHour(h);
     box.appendChild(tick);
   }
-
-  meta.textContent = bounds.map(fmtHour).join(" → ") + " · step " + stepMin + " min";
 }
 
 function startTimelineDrag(ev, idx, bounds, periods, stepMin, minGap) {
@@ -3073,6 +3201,7 @@ async function fetchPlanPreview() {
 }
 
 function bindSettings() {
+  bindPageTabs(() => settingsTab, (id) => { settingsTab = id; });
   bindSettingsPlanSelects(() => renderPage({ animate: false, preserveScroll: true }));
 
   if (!session.rates) {
@@ -3126,21 +3255,21 @@ function bindSettings() {
     };
   }
 
-  document.getElementById("editSeason").onchange = () => { renderTimeline(); fetchPlanPreview(); };
-  document.getElementById("editDay").onchange = () => { renderTimeline(); fetchPlanPreview(); };
-
-  renderTimeline();
-  fetchPlanPreview();
+  const editSeason = document.getElementById("editSeason");
+  const editDay = document.getElementById("editDay");
+  if (editSeason) editSeason.onchange = () => { renderTimeline(); fetchPlanPreview(); };
+  if (editDay) editDay.onchange = () => { renderTimeline(); fetchPlanPreview(); };
+  if (editSeason) {
+    renderTimeline();
+    fetchPlanPreview();
+  }
 }
 
 /* ── simulate page ── */
 
-function simNumField(id, label, value, step, min, max, hint) {
+function simNumField(id, label, value, step, min, max) {
   const maxAttr = max != null ? ` max="${max}"` : "";
-  const tip = hint
-    ? ` <i class="fa-solid fa-circle-question ts-tip" data-tip="${hint}" aria-label="${hint}"></i>`
-    : "";
-  return `<label class="ts-field"><span class="ts-field__label">${label}${tip}</span>
+  return `<label class="ts-field"><span class="ts-field__label">${label}</span>
     <input class="ts-input" type="number" id="${id}" data-sim="${id}" min="${min}" step="${step}"${maxAttr} value="${value}"></label>`;
 }
 
@@ -3161,30 +3290,48 @@ function simMaxReserveBidMw() {
   const scenario = buildScenarioContracts() || {};
   const kw = Number(scenario.regular_kw || session.contractValues.regular_kw || 0);
   if (!(kw > 0)) return 0;
-  // BTM 投標上限先用經常契約換算 MW；真正 PCS 上限等 sizing 後再收斂
-  return Math.round((kw / 1000) * 10) / 10;
+  // 經常契約換算 MW，對 0.1 無條件捨去（對齊後端 quantize_mw）
+  return Math.floor(kw / 100 + 1e-9) / 10;
 }
 
-function seedTouScheduleFromPeriods(touType) {
-  const tou = touType || activeSimulateTou();
-  const step = touStepMinutes(tou);
-  const map = buildPeriodMap(step, tou);
-  if (!map) return makeSeasonMatrix(() => defaultTouSlots(tou));
-  const eta = Number(session.simulate && session.simulate.chargeEff) || 0.85;
-  const out = { summer: {}, non_summer: {} };
-  const n = touSlotCount(tou);
+/** Manual 空白 HOLD 矩陣（持久化設定的空預設；不重算 Auto 規則）。 */
+function blankTouSchedule(touType) {
+  return makeSeasonMatrix(() => defaultTouSlots(touType || activeSimulateTou()));
+}
+
+function touScheduleIsAllHold(sched) {
+  if (!sched || typeof sched !== "object") return true;
   for (const season of ["summer", "non_summer"]) {
-    out[season] = {};
+    const block = sched[season];
+    if (!block || typeof block !== "object") continue;
     for (const day of ["weekday", "saturday", "sunday"]) {
-      const row = (map[season] && map[season][day]) || Array(n).fill(null);
-      out[season][day] = row.map((p, i) => {
-        if (p == null) return null;
-        const next = nextPeriodInMap(map, season, day, i);
-        return targetSocPct(season, p, next, eta);
-      });
+      const row = block[day];
+      if (!Array.isArray(row)) continue;
+      for (const v of row) {
+        if (v != null && String(v).trim() !== "") return false;
+      }
     }
   }
-  return out;
+  return true;
+}
+
+/** Auto→Manual：一次複製推薦；尚無推薦則空白。不依電價重算。 */
+function seedManualTouFromRecommended() {
+  const tou = activeSimulateTou();
+  const rec = simTouMetaFromResult()?.recommended_schedule;
+  if (rec) return normalizeScheduleMatrix(rec, () => defaultTouSlots(tou));
+  return blankTouSchedule(tou);
+}
+
+/** Manual 且全 HOLD、已有推薦時補一次種子（跑完試算後不必再切模式）。 */
+function maybeSeedManualTouOnce() {
+  const sim = session.simulate;
+  if (!sim || sim.touScheduleMode !== "manual") return;
+  if (!touScheduleIsAllHold(sim.touSchedule)) return;
+  const rec = simTouMetaFromResult()?.recommended_schedule;
+  if (!rec) return;
+  sim.touSchedule = normalizeScheduleMatrix(rec, () => defaultTouSlots(activeSimulateTou()));
+  persistSession();
 }
 
 function simulateImportSeedKey() {
@@ -3248,7 +3395,7 @@ function loadScenarioTouState(tou) {
   }
   // 排程一律依新方案時段／步距重種；不沿用上一方案手動格（否則會混半尖峰與批次）
   sim.touScheduleMode = "auto";
-  sim.touSchedule = seedTouScheduleFromPeriods(key);
+  sim.touSchedule = blankTouSchedule(key);
 }
 
 function clearSimulateResultSoft() {
@@ -3273,12 +3420,17 @@ function seedSimulateFromImport(force) {
   sim.scenarioContracts = { ...session.contractValues };
   sim.scenarioByTou = {};
   sim.touScheduleMode = "auto";
-  sim.touSchedule = seedTouScheduleFromPeriods(sim.simulateTou);
+  sim.touSchedule = blankTouSchedule(sim.simulateTou);
   sim.reserveSchedule = makeSeasonMatrix(defaultReserveHourly);
   sim.includeHalfPeak = false;
   sim.sizingStrategies = [...SIZING_TIER_IDS];
   sim.sizingEnergySeeds = [...ENERGY_SEED_IDS];
   sim.seededImportKey = key;
+  {
+    const sug = suggestedBufferKw(sim);
+    sim.demandBufferKw = sug;
+    sim.antiExportKw = sug;
+  }
   snapshotScenarioTouState(sim.simulateTou);
   persistSession();
 }
@@ -3360,7 +3512,7 @@ function renderSimMatrix(schedKey, matrix, T, cfg) {
     html += "</tr></thead><tbody>";
     for (const [day, dayLab] of days) {
       const raw = (((matrix || {})[season] || {})[day]) || [];
-      const fill = schedKey === "touSchedule" ? null : 0;
+      const fill = (schedKey === "touSchedule" || schedKey === "pcsPowerSchedule") ? null : 0;
       const hours = ensureSlots(raw, n, fill);
       html += `<tr><th>${dayLab}</th>`;
       for (let i = 0; i < n; i++) {
@@ -3369,7 +3521,7 @@ function renderSimMatrix(schedKey, matrix, T, cfg) {
         const bg = base ? `style="background:${base}29"` : "";
         const cell = hours[i];
         const val = cell == null || cell === "" ? "" : cell;
-        const ph = schedKey === "touSchedule" ? ` placeholder="—"` : "";
+        const ph = (schedKey === "touSchedule" || schedKey === "pcsPowerSchedule") ? ` placeholder="—"` : "";
         const ro = (cfg.readonly || cfg.viewOnly) ? " readonly" : "";
         const schedAttr = cfg.viewOnly ? "" : ` data-sched="${schedKey}"`;
         html += `<td ${bg}><input class="sim-matrix__input" type="number"${schedAttr} data-season="${season}" data-day="${day}" data-slot="${i}"${minAttr}${maxAttr}${stepAttr}${ph}${ro} value="${val}"></td>`;
@@ -3402,19 +3554,19 @@ function renderFnModeCard(prefix, modeKey, sim, T, opts = {}) {
         ${badge ? `<span class="sim-fn-row__badge">${badge}</span>` : ""}
       </div>
       <div class="sim-fn-row__actions">
-        <div class="sim-schedule__switch" role="group">
+      <div class="sim-schedule__switch" role="group">
           <label class="sim-seg${autoOn ? " sim-seg--on" : ""}">
             <input type="radio" name="${modeKey}" value="auto"${autoOn ? " checked" : ""}> ${T.scheduleAuto}
-          </label>
+        </label>
           <label class="sim-seg${!autoOn ? " sim-seg--on" : ""}">
             <input type="radio" name="${modeKey}" value="manual"${!autoOn ? " checked" : ""}> ${T.scheduleManual}
-          </label>
-        </div>
+        </label>
+      </div>
         <button type="button" class="btm-btn btm-btn--ghost sim-schedule__open" data-sched-open="${prefix}"
-          ${autoOn ? " disabled aria-disabled=\"true\"" : ""} title="${autoOn ? T.scheduleModeHintAuto : T.scheduleEdit}">
+          ${autoOn ? " disabled aria-disabled=\"true\"" : ""}>
           <i class="fa-solid fa-table" aria-hidden="true"></i> ${T.scheduleEdit}
         </button>
-      </div>
+    </div>
     </div>
   </div>`;
 }
@@ -3445,8 +3597,7 @@ function reserveFailLabel(T, reason) {
 
 function simTouMetaFromResult(res) {
   const base = res || normalizeSimulateSizeResult(session.lastSimulateSize);
-  const row = simViewRow(base);
-  return (row && row.tou_meta) || (base && base.tou_meta) || null;
+  return simRowField(base, simViewRow(base), "tou_meta");
 }
 
 function simReserveMetaFromResult(res) {
@@ -3460,50 +3611,99 @@ function simReserveMetaFromResult(res) {
 }
 
 function renderReportRecSchedules(T, res) {
-  // 配置檢視只放 TOU；備轉入口在額外收益區
+  /** 報告內直接呈現排程矩陣（唯讀）；不再彈窗／套用並調整。 */
   const touMeta = simTouMetaFromResult(res) || {};
-  const touRec = touMeta.recommended_schedule;
-  const touAuto = session.simulate.touScheduleMode === "auto" && touRec;
-  if (!touAuto) return "";
-
-  const ref = touMeta.halfpeak_ref;
-  let touSummary = "";
-  if (ref) {
-    touSummary = ref.enabled
-      ? `<p class="btm-meta">${T.touHalfpeakOn.replace("{pct}", fmt(ref.reserve_soc_pct, 1))}</p>`
-      : `<p class="btm-meta">${T.touHalfpeakOff}</p>`;
+  const tou = (res && res.simulate_tou_type) || activeSimulateTou();
+  const step = touStepMinutes(tou);
+  const blocks = [];
+  const touMatrix = touMeta.recommended_schedule
+    || (session.simulate.touScheduleMode === "manual" ? session.simulate.touSchedule : null);
+  if (touMatrix) {
+    blocks.push(`<div class="sim-report-sched__block">
+      <h3 class="btm-subhead">${T.touRecTitle || T.simRecTou}</h3>
+      ${renderSimMatrix("touSchedule", touMatrix, T, {
+        header: T.touTargetSoc,
+        min: 0,
+        max: 100,
+        step: 1,
+        slotMinutes: step,
+        touType: tou,
+        readonly: true,
+        viewOnly: true,
+      })}
+    </div>`);
   }
-  return `<div class="sim-report-rec" id="simReportRec">
-    <div class="sim-report-rec__item">
-      <div class="sim-report-rec__lead">
-        <strong>${T.simRecTou}</strong>
-        ${touSummary}
-      </div>
-      <div class="sim-fn-subcard__actions">
-        <button type="button" class="btm-btn btm-btn--ghost" data-sched-open-rec="tou">${T.scheduleViewRec}</button>
-        <button type="button" class="btm-btn btm-btn--ghost" data-apply-rec-manual="tou">${T.scheduleUseAsManual}</button>
-      </div>
-    </div>
-  </div>`;
+  const fns = res?.functions || session.simulate.functions || [];
+  const reserveMeta = simReserveMetaFromResult(res) || {};
+  const reserveMatrix = reserveMeta.recommended_schedule || null;
+  if (fns.includes("reserve") && reserveMatrix) {
+    blocks.push(`<div class="sim-report-sched__block">
+      <h3 class="btm-subhead">${T.reserveRecTitle || T.simRecReserve}</h3>
+      ${renderSimMatrix("reserveSchedule", reserveMatrix, T, {
+        header: T.reserveBidMw,
+        min: 0,
+        step: 0.1,
+        slotMinutes: 60,
+        readonly: true,
+        viewOnly: true,
+      })}
+    </div>`);
+  }
+  const power = simPcsPowerMatrixForView(res, step);
+  if (power) {
+    blocks.push(`<div class="sim-report-sched__block">
+      <h3 class="btm-subhead">${T.touPowerTitle || T.scheduleViewPower}</h3>
+      ${renderSimMatrix("pcsPowerSchedule", power, T, {
+        header: T.touActualPower,
+        step: 0.1,
+        slotMinutes: step,
+        touType: tou,
+        readonly: true,
+        viewOnly: true,
+      })}
+    </div>`);
+  }
+  if (!blocks.length) return "";
+  return `<div class="sim-report-sched" id="simReportRec">${blocks.join("")}</div>`;
 }
 
-function simEnergyTransferHtml(res, T, row) {
+function simMoneyInt(x) {
+  const v = Number(x) || 0;
+  return v >= 0 ? Math.floor(v + 0.5) : Math.ceil(v - 0.5);
+}
+
+function simEnergyTransferHtml(res, T, row, { embedded = false } = {}) {
   const r = row || simViewRow(res);
-  const payload = (r && r.energy_transfer) || (res && res.energy_transfer) || null;
+  const payload = simRowField(res, r, "energy_transfer");
   const rows = (payload && payload.rows) || [];
+  if (!rows.length) {
+    if (!embedded && simViewDetailWaiting(res, r)) {
+      return simBusyCard("simEnergyTransfer", T.simEnergyTransfer, T.simViewBusy);
+    }
+    return "";
+  }
   const baseTou = (payload && payload.baseline_tou) || (res && res.baseline_tou_type) || importPlanTou();
   const simTou = (payload && payload.simulate_tou) || (res && res.simulate_tou_type) || activeSimulateTou();
   const colBefore = `${T.simKwhBefore}<br><span class="btm-meta">${baseTou}</span>`;
   const colAfter = `${T.simKwhAfter}<br><span class="btm-meta">${simTou}</span>`;
-  if (!rows.length) {
-    return `<section class="sim-view-section" id="simEnergyTransfer">
-      <h4 class="sim-view-section__title">${T.simEnergyTransfer}</h4>
-      <p class="btm-meta">—</p>
-    </section>`;
-  }
+  const showItemAmt = rows.some((x) => x.before_amount != null);
+  const showRowMoney = rows.some((x) => x.delta_amount != null);
+  // 合計：帳單快照流動電費差（與 calc_full_bill 同口徑）
+  const billDelta = payload && payload.energy_total_delta != null
+    ? Number(payload.energy_total_delta)
+    : null;
+  const showMoney = billDelta != null && Number.isFinite(billDelta);
+  const effKwh = payload && payload.effective_transfer_kwh != null
+    ? Number(payload.effective_transfer_kwh)
+    : rows.reduce((s, x) => {
+      const d = Number(x.delta_kwh);
+      return s + (d < 0 ? d : 0);
+    }, 0);
+  const moneyCls = (n) => (n < 0 ? " sim-delta--save" : (n > 0 ? " sim-delta--up" : ""));
   const body = rows.map((x) => {
     const pct = x.delta_pct == null ? "—" : `${fmt(x.delta_pct, 1)}%`;
-    const dCls = Number(x.delta_kwh) < 0 ? " sim-delta--save" : "";
+    const d = Number(x.delta_kwh);
+    const dCls = d < 0 ? " sim-delta--save" : (d > 0 ? " sim-delta--up" : "");
     const side = x.side || "both";
     const rowCls = side === "both" ? "" : " sim-xfer-row--oneside";
     const sideTag = side === "before_only"
@@ -3511,137 +3711,100 @@ function simEnergyTransferHtml(res, T, row) {
       : side === "after_only"
         ? `<span class="btm-chip btm-chip--dim">${T.simXferSideAfter}</span> `
         : "";
+    const itemAmt = !showItemAmt ? "" : (() => {
+      const ba = x.before_amount == null ? null : Number(x.before_amount);
+      return `<td class="num">${ba == null ? "—" : fmt(ba)}</td>`;
+    })();
+    const amtCell = !showRowMoney ? "" : (() => {
+      const da = x.delta_amount == null ? null : Number(x.delta_amount);
+      const aCls = da == null ? "" : moneyCls(da);
+      return `<td class="num${aCls}">${da == null ? "—" : fmt(da)}</td>`;
+    })();
     return `<tr class="${rowCls}">
       <td>${seasonLabel(x.season)}</td>
       <td>${sideTag}${periodLabel(x.period)}</td>
+      ${itemAmt}
       <td class="num">${fmt(x.before_kwh, 1)}</td>
       <td class="num">${fmt(x.after_kwh, 1)}</td>
       <td class="num${dCls}">${fmt(x.delta_kwh, 1)}</td>
       <td class="num${dCls}">${pct}</td>
+      ${amtCell}
     </tr>`;
   }).join("");
-  return `<section class="sim-view-section" id="simEnergyTransfer">
-    <h4 class="sim-view-section__title">${T.simEnergyTransfer}</h4>
+  const footParts = [];
+  if (Number.isFinite(effKwh)) {
+    const absEff = Math.abs(effKwh);
+    footParts.push(
+      `<span>${T.simXferEffective} <strong>${fmt(absEff, 1)}</strong> kWh</span>`
+    );
+  }
+  if (showMoney) {
+    footParts.push(
+      `<span>${T.simXferEnergy} <strong class="${moneyCls(billDelta).trim()}">${fmt(billDelta)}</strong></span>`
+    );
+  }
+  const foot = !footParts.length ? "" : `<div class="sim-xfer-totals">${footParts.join("")}</div>`;
+  const inner = `
+    <h4 class="btm-subhead">${T.simEnergyTransfer}</h4>
     <div class="btm-table-wrap">
       <table class="btm-table btm-table--dash">
         <thead><tr>
           <th>${t("settings.season")}</th>
           <th>${t("dashboard.item")}</th>
+          ${showItemAmt ? `<th class="num">${T.simXferItemAmount}</th>` : ""}
           <th class="num">${colBefore}</th>
           <th class="num">${colAfter}</th>
           <th class="num">${T.simKwhDelta}</th>
           <th class="num">${T.simKwhDeltaPct}</th>
+          ${showRowMoney ? `<th class="num">${T.simXferAmount}</th>` : ""}
         </tr></thead>
         <tbody>${body}</tbody>
       </table>
     </div>
-  </section>`;
-}
-
-function renderReserveReportBlock(T, res) {
-  /** 備轉月結／事件折疊（併入額外收益區，不另開大卡）。 */
-  const s2 = simActiveStage2(res);
-  const final = s2 && s2.final;
-  const view = final || simViewRow(res) || res;
-  const ri = view.reserve_income || res.reserve_income || {};
-  const credit = Number(ri.total || 0);
-  const hasFn = (res.functions || []).includes("reserve");
-  if (!hasFn && credit === 0) return "";
-
-  const monthlyRows = Object.entries(ri.monthly || {}).sort(([a], [b]) => a.localeCompare(b));
-  const events = Array.isArray(ri.events) ? ri.events : [];
-
-  const monthTable = monthlyRows.length ? `
-    <details class="sim-reserve-fold">
-      <summary class="sim-reserve-fold__summary">
-        <span>${T.reserveMonthlyTitle}</span>
-        <span class="btm-chip btm-chip--dim">${monthlyRows.length}</span>
-      </summary>
-      <div class="sim-reserve-fold__body">
-        <div class="sim-reserve-table-wrap btm-table-wrap">
-          <table class="sim-reserve-table btm-table btm-table--dash">
-            <thead><tr>
-              <th>${T.reserveMonth}</th>
-              <th>${T.reserveBidMwh}</th>
-              <th>${T.reserveIncomeCap}</th>
-              <th>${T.reserveIncomePerf}</th>
-              <th>${T.reserveIncomeEnergy}</th>
-              <th>${T.reserveIncomeTotal}</th>
-            </tr></thead>
-            <tbody>${monthlyRows.map(([m, b]) => `<tr>
-              <td>${m}</td>
-              <td>${fmt(b.bid_mwh, 1)}</td>
-              <td>${fmt(b.capacity)}</td>
-              <td>${fmt(b.performance)}</td>
-              <td>${fmt(b.activation_energy)}</td>
-              <td>${fmt(b.total)}</td>
-            </tr>`).join("")}</tbody>
-          </table>
-        </div>
-      </div>
-    </details>` : "";
-
-  const eventTable = events.length ? `
-    <details class="sim-reserve-fold">
-      <summary class="sim-reserve-fold__summary">
-        <span>${T.reserveEvents}</span>
-        <span class="btm-chip btm-chip--dim">${events.length}</span>
-      </summary>
-      <div class="sim-reserve-fold__body">
-        <div class="sim-reserve-table-wrap btm-table-wrap">
-          <table class="sim-reserve-table btm-table btm-table--dash">
-            <thead><tr>
-              <th>${T.reserveEventDate}</th>
-              <th>${T.reserveEventBid}</th>
-              <th>${T.reserveQuality}</th>
-              <th>${T.reserveDeliveredMwh}</th>
-              <th>${T.reserveEventResult}</th>
-            </tr></thead>
-            <tbody>${events.map((e) => {
-              const ok = !!e.strict_ok;
-              const result = ok
-                ? `<span class="sim-reserve-ok">${T.reserveEventOk}</span>`
-                : `<span class="sim-reserve-fail">${reserveFailLabel(T, e.fail_reason)}</span>`;
-              return `<tr>
-                <td>${e.date || e.month || "—"}</td>
-                <td>${fmt(e.bid_mw, 1)}</td>
-                <td>${fmt(e.official_quality, 2)}</td>
-                <td>${fmt((Number(e.delivered_kwh) || 0) / 1000, 3)}</td>
-                <td>${result}</td>
-              </tr>`;
-            }).join("")}</tbody>
-          </table>
-        </div>
-      </div>
-    </details>` : "";
-
-  if (!monthTable && !eventTable) return "";
-  return `<div class="sim-reserve-folds" id="simReservePanel">${monthTable}${eventTable}</div>`;
+    ${foot}`;
+  if (embedded) return `<div class="sim-benefit-transfer">${inner}</div>`;
+  return `<section class="btm-card hud-panel hud-frame" id="simEnergyTransfer">${inner}</section>`;
 }
 
 function scheduleModalConfig(kind, sim, T) {
-  if (kind === "tou" || kind === "tou-rec") {
+  if (kind === "tou" || kind === "tou-rec" || kind === "tou-power") {
     const res = normalizeSimulateSizeResult(session.lastSimulateSize);
     const tou = (res && res.simulate_tou_type) || activeSimulateTou();
+    const step = touStepMinutes(tou);
     const recOnly = kind === "tou-rec";
-    const matrix = recOnly
-      ? (simTouMetaFromResult()?.recommended_schedule || sim.touSchedule)
-      : sim.touSchedule;
+    const powerOnly = kind === "tou-power";
+    let matrix = sim.touSchedule;
+    let title = `${T.touTargetSoc} · ${tou}`;
+    let header = T.touTargetSoc;
+    let min = 0;
+    let max = 100;
+    let stepNum = 1;
+    if (recOnly) {
+      matrix = (simTouMetaFromResult()?.recommended_schedule || sim.touSchedule);
+      title = `${T.touRecTitle} · ${tou}`;
+    } else if (powerOnly) {
+      matrix = simPcsPowerMatrixForView(res, step) || makeSeasonMatrix(() => Array(Math.round((24 * 60) / step)).fill(null));
+      title = `${T.touPowerTitle} · ${tou}`;
+      header = T.touActualPower;
+      min = undefined;
+      max = undefined;
+      stepNum = 0.1;
+    }
     return {
       kind: "tou",
-      title: recOnly ? `${T.touRecTitle} · ${tou}` : `${T.touTargetSoc} · ${tou}`,
+      title,
       modeKey: "touScheduleMode",
-      schedKey: "touSchedule",
+      schedKey: powerOnly ? "pcsPowerSchedule" : "touSchedule",
       matrix,
       cfg: {
-        header: T.touTargetSoc,
-        min: 0,
-        max: 100,
-        step: 1,
-        slotMinutes: touStepMinutes(tou),
+        header,
+        min,
+        max,
+        step: stepNum,
+        slotMinutes: step,
         touType: tou,
-        readonly: recOnly || sim.touScheduleMode !== "manual",
-        viewOnly: recOnly,
+        readonly: recOnly || powerOnly || sim.touScheduleMode !== "manual",
+        viewOnly: recOnly || powerOnly,
       },
     };
   }
@@ -3679,8 +3842,9 @@ function renderScheduleModal(T, sim) {
   if (!spec) return "";
   const mode = sim[spec.modeKey];
   const badge = spec.cfg.badge ? `<span class="sim-schedule__badge">${spec.cfg.badge}</span>` : "";
-  const modeChip = (simScheduleModal === "reserve-rec" || simScheduleModal === "tou-rec")
-    ? `<span class="btm-chip btm-chip--dim">${T.scheduleAuto}</span>`
+  const viewKinds = ["reserve-rec", "tou-rec", "tou-power"];
+  const modeChip = viewKinds.includes(simScheduleModal)
+    ? `<span class="btm-chip btm-chip--dim">${simScheduleModal === "tou-power" ? T.scheduleViewPower : T.scheduleAuto}</span>`
     : `<span class="btm-chip btm-chip--dim">${mode === "manual" ? T.scheduleManual : T.scheduleAuto}</span>`;
   return `<div class="sim-sched-modal" id="simSchedModal" role="dialog" aria-modal="true" aria-labelledby="simSchedModalTitle">
     <button type="button" class="sim-sched-modal__backdrop" data-sched-close tabindex="-1" aria-label="${T.scheduleDone}"></button>
@@ -3773,10 +3937,13 @@ function readSimulateForm() {
   document.querySelectorAll("[data-sim-check]").forEach((el) => {
     sim[el.dataset.simCheck] = el.checked;
   });
-  // 單一 UI 開關：離峰加額與契約降容評估同步（與 demand tab 連動由事件處理）
-  if (document.querySelector('[data-sim-check="autoAdjustOffPeakContract"]')) {
-    sim.evaluateContractReduction = !!sim.autoAdjustOffPeakContract;
+  // demand 功能驅動第2層契約評估
+  if ((sim.functions || []).includes("demand")) {
+    sim.evaluateContractReduction = true;
+  } else if (document.querySelector('[name="bessFn"][value="demand"]')) {
+    sim.evaluateContractReduction = false;
   }
+  delete sim.autoAdjustOffPeakContract;
   const simTouEl = document.getElementById("simScenarioTou");
   if (simTouEl && TOU_OPTIONS.includes(simTouEl.value) && simTouEl.value !== sim.simulateTou) {
     applySimulateTouChange(simTouEl.value);
@@ -3789,12 +3956,20 @@ function readSimulateForm() {
   if (touMode) sim.touScheduleMode = touMode.value;
   const reserveMode = document.querySelector('[name="reserveScheduleMode"]:checked');
   if (reserveMode) sim.reserveScheduleMode = reserveMode.value;
-  const picked = [...document.querySelectorAll('[name="sizingStrategies"]:checked')].map((el) => el.value);
-  sim.sizingStrategies = normalizeSizingStrategies(picked);
-  const energyPicked = [...document.querySelectorAll('[name="sizingEnergySeeds"]:checked')].map((el) => el.value);
-  // 電量面向 checkbox 已渲染時才覆寫；否則保留 session
-  if (document.querySelector('[name="sizingEnergySeeds"]')) {
-    sim.sizingEnergySeeds = normalizeEnergySeeds(energyPicked);
+  const sizingModeEl = document.querySelector('[name="sizingMode"]:checked');
+  if (sizingModeEl) sim.sizingMode = sizingModeEl.value === "single" ? "single" : "grid";
+  const pickedBoxes = [...document.querySelectorAll('[name="sizingStrategies"]')];
+  if (pickedBoxes.some((el) => !el.disabled)) {
+    sim.sizingStrategies = normalizeSizingStrategies(
+      pickedBoxes.filter((el) => el.checked && !el.disabled).map((el) => el.value),
+    );
+  }
+  const energyBoxes = [...document.querySelectorAll('[name="sizingEnergySeeds"]')];
+  // 樣本未到時卡片是 disabled，不能把 session 裡已選的清掉
+  if (energyBoxes.some((el) => !el.disabled)) {
+    sim.sizingEnergySeeds = normalizeEnergySeeds(
+      energyBoxes.filter((el) => el.checked && !el.disabled).map((el) => el.value),
+    );
   } else if (!Array.isArray(sim.sizingEnergySeeds)) {
     sim.sizingEnergySeeds = [...ENERGY_SEED_IDS];
   }
@@ -3804,26 +3979,17 @@ function readSimulateForm() {
   persistSession();
 }
 
-function syncDemandAutoContract(sim, source) {
-  /** 外層契約容量（demand）與內層自動調整同開同關。 */
+function syncContractFunction(sim, source) {
+  /** demand 功能＝自動調整契約容量；不與防超約參數綁定。 */
   if (source === "demand") {
-    const on = (sim.functions || []).includes("demand");
-    sim.autoAdjustOffPeakContract = on;
-    sim.evaluateContractReduction = on;
+    sim.evaluateContractReduction = (sim.functions || []).includes("demand");
+    delete sim.autoAdjustOffPeakContract;
     return;
   }
-  if (source === "auto") {
-    const on = !!(sim.autoAdjustOffPeakContract || sim.evaluateContractReduction);
-    sim.autoAdjustOffPeakContract = on;
-    sim.evaluateContractReduction = on;
-    const rest = (sim.functions || []).filter((f) => f !== "tou" && f !== "demand");
-    sim.functions = on ? ["tou", ...rest, "demand"] : ["tou", ...rest];
-    return;
-  }
-  const on = !!(sim.autoAdjustOffPeakContract || sim.evaluateContractReduction)
+  const on = !!sim.evaluateContractReduction
     || (sim.functions || []).includes("demand");
-  sim.autoAdjustOffPeakContract = on;
   sim.evaluateContractReduction = on;
+  delete sim.autoAdjustOffPeakContract;
   const rest = (sim.functions || []).filter((f) => f !== "tou" && f !== "demand");
   sim.functions = on ? ["tou", ...rest, "demand"] : ["tou", ...rest];
 }
@@ -3874,8 +4040,7 @@ function renderSimulateTabs(T, sim) {
     const active = sim.detailTab === id && checked ? " sim-tab--active" : "";
     const dimmed = checked ? "" : " sim-tab--dim";
     const blocked = largeBlocked ? " disabled" : "";
-    const title = largeBlocked ? ` title="${T.simLargeUserDisabled}"` : "";
-    return `<button type="button" class="sim-tab${active}${dimmed}" data-tab="${id}" role="tab"${title}${largeBlocked ? " aria-disabled=\"true\"" : ""}>
+    return `<button type="button" class="sim-tab${active}${dimmed}" data-tab="${id}" role="tab"${blocked}${largeBlocked ? " aria-disabled=\"true\"" : ""}>
       <label class="sim-tab-check" onclick="event.stopPropagation()">
         <input type="checkbox" name="bessFn" value="${id}"${checked ? " checked" : ""}${blocked}>
         <span class="sim-tab-check__box"></span>
@@ -3982,6 +4147,14 @@ function simWantsStage2(res) {
   return (res.functions || []).includes("reserve");
 }
 
+/** 需要第二層且尚未完成（full 失敗則放行，顯示 stage1＋錯誤）。 */
+function simStage2Pending(res) {
+  if (!res || !simWantsStage2(res)) return false;
+  if (simHasFullContext(res)) return false;
+  if (session._simFullError && !simulateFullFetch) return false;
+  return true;
+}
+
 function simStage2Map(res) {
   return (res && res.stage2ByKey) || {};
 }
@@ -4057,15 +4230,65 @@ function simMergeStage2Row(base, s2) {
 
 function simViewRow(res, mode) {
   const base = simViewBaseRow(res, mode);
-  if (simViewContext === "full") {
-    const s2 = simStage2At(res, base);
-    if (s2) return simMergeStage2Row(base, s2);
-  }
+  // Final Bundle：有 Stage2 就合併；不再在 sizing/full 兩套結果間切換
+  const s2 = simStage2At(res, base);
+  if (s2) return simMergeStage2Row(base, s2);
   return base;
+}
+
+/** 目前選點的最終口徑：有 Stage2＝full，否則 sizing。 */
+function syncSimViewContext(res, row) {
+  simViewContext = simHasFullContext(res, row || simViewBaseRow(res)) ? "full" : "sizing";
+  return simViewContext;
+}
+
+function simAdoptedSchemeContracts(res, row) {
+  const r = row || simViewRow(res);
+  if (r && r.stage2_contracts) return r.stage2_contracts;
+  const s2 = simStage2At(res, simViewBaseRow(res));
+  if (s2 && s2.final && s2.final.stage2_contracts) return s2.final.stage2_contracts;
+  return null;
 }
 
 function simViewBillRow(res) {
   return simViewRow(res);
+}
+
+function simHighlightKey(res) {
+  return simRowChartKey((res && (res.recommended || res.best_effort)) || null);
+}
+
+/** 只取這個點自己的欄位；頂層資料屬於目前重點才沿用。 */
+function simRowField(res, row, field) {
+  if (row && row[field]) return row[field];
+  const s2 = simStage2At(res, row);
+  if (s2 && s2.final && s2.final[field]) return s2.final[field];
+  if (s2 && s2[field]) return s2[field];
+  if (row && res && res[field] && simRowChartKey(row) === simHighlightKey(res)) return res[field];
+  return null;
+}
+
+function simUnitSaveValue(row) {
+  const batt = Number(row?.batt_kwh) || 0;
+  if (!(batt > 0)) return null;
+  return Number(row?.savings || 0) / batt;
+}
+
+function simViewDetailWaiting(res, row) {
+  if (!row || !session.importId || row._simChartsFailed) return false;
+  const key = simRowChartKey(row);
+  if (!key) return false;
+  // 需要 Stage2 但尚未完成：顯示計算中
+  if (simWantsStage2(res) && !simHasFullContext(res, row)) return true;
+  if (simLookupDispatchCache(row) || simRowField(res, row, "energy_transfer")) return false;
+  return true;
+}
+
+function simBusyCard(id, title, msg) {
+  return `<section class="btm-card hud-panel hud-frame" id="${id}">
+    <h2 class="btm-card__title seetel-title">${title}</h2>
+    ${busyBlockHtml(msg)}
+  </section>`;
 }
 
 function simSyncViewChartKey(res) {
@@ -4089,6 +4312,7 @@ function simMergeFullResult(base, full) {
     timing: full.timing || src.timing,
     stage2ByKey: { ...(src.stage2ByKey || {}), ...(full.stage2ByKey || {}) },
     stage2: src.stage2 || null,
+    _simulatePayload: src._simulatePayload || full._simulatePayload || simFrozenPayload,
   });
   if (!out) return null;
   if (full.stage2 && full.stage2.enabled && full.stage2.final) {
@@ -4102,11 +4326,13 @@ function simMergeFullResult(base, full) {
   if (evalKey && evalKey === recKey) {
     out.stage2 = full.stage2;
     out.benefit_split = full.benefit_split;
+    out.benefit_report = full.benefit_report
+      || (full.stage2 && full.stage2.benefit_report);
     out.savings = full.savings;
     out.bill_savings = full.bill_savings;
     out.after = full.after;
     out.final = full.final;
-    out.proposal = full.proposal;
+    out.proposal = full.proposal || (full.stage2 && full.stage2.proposal);
     out.reserve_income = full.reserve_income;
     out.reserve_meta = full.reserve_meta;
     out.tou_meta = full.tou_meta;
@@ -4116,6 +4342,8 @@ function simMergeFullResult(base, full) {
     out.stage2 = out.stage2ByKey[recKey];
     const recS2 = out.stage2ByKey[recKey];
     if (recS2.benefit_split) out.benefit_split = recS2.benefit_split;
+    if (recS2.benefit_report) out.benefit_report = recS2.benefit_report;
+    if (recS2.proposal) out.proposal = recS2.proposal;
   }
   return out;
 }
@@ -4128,38 +4356,8 @@ function simGridRowClass(row) {
   return parts.join(" ");
 }
 
-function simGridLegendHtml(res, T) {
-  const marks = [
-    ["rec", res.recommended, T.simGridLegendRec],
-    ["save", res.best_effort, T.simGridLegendSave],
-    ["util", res.max_util, T.simGridLegendUtil],
-  ];
-  const items = marks.flatMap(([cls, row, label]) => {
-    if (!row) return [];
-    return [`<span class="sim-grid-legend__swatch sim-grid-legend__swatch--${cls}"></span>${label}`];
-  });
-  if (!res.viable) {
-    items.push(`<span class="sim-grid-legend__hint">${T.simNoViable}</span>`);
-  }
-  return `<div class="sim-grid-legend btm-meta">${items.map((x) => `<span class="sim-grid-legend__item">${x}</span>`).join("")}</div>`;
-}
-
 function simGridMetricTh(main, sub) {
   return `<th class="num sim-grid-th" title="${main} · ${sub}"><span>${main}</span><small>${sub}</small></th>`;
-}
-
-function simSnapshotFromResult(res) {
-  const r = res.recommended || res.best_effort;
-  if (!r) return null;
-  return {
-    pcs_kw: r.pcs_kw,
-    batt_kwh: r.batt_kwh,
-    hours: r.hours,
-    savings: res.savings != null ? res.savings : r.savings,
-    savings_pct: r.savings_pct != null ? r.savings_pct : res.savings_pct,
-    viable: !!res.viable,
-    after_total: r.after_total,
-  };
 }
 
 function simPcsTierLabels(stats, T) {
@@ -4179,46 +4377,6 @@ function simPcsTierLabels(stats, T) {
   return out;
 }
 
-function simLastRunCardHtml(snap, T, { mode }) {
-  if (!snap) return "";
-  const sizeLabel = snap.viable ? T.simKpiSize : T.simTagBest;
-  const saveCls = Number(snap.savings) >= 0 ? " sim-last-run__save--pos" : " sim-last-run__save--neg";
-  const note = mode === "dismissed" ? T.simLastRunCleared : T.simLastRunRerun;
-  const dismissBtn = mode === "dismissed"
-    ? `<button type="button" class="btm-btn btm-btn--ghost" id="btnSimDismissSnapshot">${T.simLastRunDismiss}</button>`
-    : "";
-  return `<section class="sim-last-run hud-panel hud-frame" role="status">
-    <div class="sim-last-run__head">
-      <h3 class="sim-last-run__title">${T.simResultSummary}</h3>
-      ${dismissBtn}
-    </div>
-    <p class="btm-meta sim-last-run__note">${note}</p>
-    <div class="sim-last-run__body">
-      <div class="sim-last-run__metric">
-        <span class="sim-last-run__label">${sizeLabel}</span>
-        <span class="sim-last-run__value">${fmt(snap.pcs_kw, 0)} <small>kW</small> / ${fmt(snap.batt_kwh, 0)} <small>kWh</small></span>
-        <span class="btm-meta">${T.simHours} ${fmt(snap.hours, 1)}</span>
-      </div>
-      <div class="sim-last-run__metric${saveCls}">
-        <span class="sim-last-run__label">${T.simKpiSave}</span>
-        <span class="sim-last-run__value">${fmt(snap.savings, 0)}</span>
-        <span class="btm-meta">${T.simKpiSavePct} ${fmt(snap.savings_pct, 1)}%</span>
-      </div>
-    </div>
-  </section>`;
-}
-
-function renderSimLastRunCard(T) {
-  const running = !!simulateFetch || !!simulateSampleFetch;
-  if (simDismissedSnapshot) {
-    return simLastRunCardHtml(simDismissedSnapshot, T, { mode: "dismissed" });
-  }
-  if (running && simPinnedRun) {
-    return simLastRunCardHtml(simPinnedRun, T, { mode: "pinned" });
-  }
-  return "";
-}
-
 function simMetricPct(row, key) {
   const v = row && row[key];
   return v != null && v !== "" ? `${fmt(v, 1)}%` : "—";
@@ -4231,415 +4389,48 @@ function simSeasonMetricCells(row) {
         <td class="num">${simMetricPct(row, "daily_cycle_pct_non_summer")}</td>`;
 }
 
-function simSeasonMetricsTooltip(point, T) {
-  if (!point) return "";
-  return `<br>${T.simPcsDailyAvg}（${T.summer}）: ${fmt(point.pcs_daily_avg_pct_summer, 1)}%
-            <br>${T.simPcsDailyAvg}（${T.nonSummer}）: ${fmt(point.pcs_daily_avg_pct_non_summer, 1)}%
-            <br>${T.simDailyCycle}（${T.summer}）: ${fmt(point.daily_cycle_pct_summer, 1)}%
-            <br>${T.simDailyCycle}（${T.nonSummer}）: ${fmt(point.daily_cycle_pct_non_summer, 1)}%`;
-}
-
 function simGridResultsHtml(res, T) {
-  const rows = res.grid || [];
+  const rows = (res.grid || []).slice().sort((a, b) => {
+    const pcs = Number(a.pcs_kw) - Number(b.pcs_kw);
+    if (pcs) return pcs;
+    return Number(a.batt_kwh) - Number(b.batt_kwh);
+  });
   if (!rows.length) return `<p class="btm-meta">—</p>`;
   const tiers = simPcsTierLabels(res.profile_stats, T);
-  const byPcs = {};
-  for (const row of rows) {
-    const k = Math.round(Number(row.pcs_kw) * 10) / 10;
-    if (!byPcs[k]) byPcs[k] = [];
-    byPcs[k].push(row);
-  }
-  const groups = Object.keys(byPcs).map((k) => {
-    const pcs = Number(k);
-    const grp = byPcs[k].sort((a, b) => Number(b.savings) - Number(a.savings));
-    return { pcs, rows: grp, topSave: Number(grp[0].savings) };
-  }).sort((a, b) => b.topSave - a.topSave);
-
-  const blocks = groups.map((g) => {
-    const tierLab = tiers[g.pcs]
-      ? `<span class="sim-grid-group__tier">${tiers[g.pcs]}</span>`
-      : "";
-    const body = g.rows.map((row) => {
-      const rowCls = simGridRowClass(row);
-      return `<tr class="${rowCls}">
-        <td class="num">${fmt(row.batt_kwh, 0)}</td>
-        <td class="num">${fmt(row.hours, 1)}</td>
-        ${simSeasonMetricCells(row)}
-        <td class="num">${fmt(row.after_total)}</td>
-        <td class="num">${fmt(row.savings)}</td>
-        <td class="num">${fmt(row.savings_pct, 1)}%</td>
-      </tr>`;
-    }).join("");
-    return `<section class="sim-grid-group hud-panel hud-frame">
-      <header class="sim-grid-group__head">
-        <div class="sim-grid-group__lead">
-          <span class="sim-grid-group__pcs">${fmt(g.pcs, 1)}<small>kW</small></span>
-          ${tierLab}
-        </div>
-        <div class="sim-grid-group__stat">
-          <span class="sim-grid-group__stat-val">${fmt(g.topSave, 0)}</span>
-          <span class="sim-grid-group__stat-lab">${T.simSavings}</span>
-        </div>
-      </header>
-      <div class="btm-table-wrap sim-grid-table-wrap">
-        <table class="btm-table btm-table--dash sim-grid-table">
-          <thead><tr>
-            <th class="num">${T.simBatt}</th>
-            <th class="num">${T.simHours}</th>
-            ${simGridMetricTh(T.simPcsDailyAvg, T.summer)}
-            ${simGridMetricTh(T.simPcsDailyAvg, T.nonSummer)}
-            ${simGridMetricTh(T.simDailyCycle, T.summer)}
-            ${simGridMetricTh(T.simDailyCycle, T.nonSummer)}
-            <th class="num">${T.simAfterBill}</th>
-            <th class="num">${T.simSavings}</th>
-            <th class="num">${T.simKpiSavePct}</th>
-          </tr></thead>
-          <tbody>${body}</tbody>
-        </table>
-      </div>
-    </section>`;
-  }).join("");
-
-  return `${simGridLegendHtml(res, T)}<div class="sim-grid-groups">${blocks}</div>`;
-}
-
-function simBillCompareHtml(res, T, row) {
-  const r = row || simViewBillRow(res);
-  if (!r) return `<p class="btm-meta">—</p>`;
-  const before = res.before || {};
-  const ri = (r.reserve_income && r.reserve_income.total != null)
-    ? r.reserve_income
-    : (res.reserve_income || {});
-  const credit = Number(ri.total || 0);
-  const showReserve = simViewContext === "full" && simHasFullContext(res)
-    && ((res.functions || []).includes("reserve") || credit !== 0);
-  const after = {
-    basic_total: r.after_basic_total,
-    overage_total: r.after_overage_total,
-    energy_total: r.after_energy_total,
-    total: r.after_total,
-  };
-  const afterNet = Number(after.total || 0) - credit;
-  const beforeTotal = Number(before.total || 0);
-  const delta = {
-    basic_total: Number(after.basic_total || 0) - Number(before.basic_total || 0),
-    overage_total: Number(after.overage_total || 0) - Number(before.overage_total || 0),
-    energy_total: Number(after.energy_total || 0) - Number(before.energy_total || 0),
-    total: Number(after.total || 0) - beforeTotal,
-    net: afterNet - beforeTotal,
-  };
-  const afterLabel = showReserve
-    ? T.reserveNetAfter
-    : (simViewContext === "sizing" ? (T.simBillSizingOnly || T.simKpiAfter) : T.simKpiAfter);
-  const rows = [
-    [t("dashboard.basic"), before.basic_total, after.basic_total, delta.basic_total],
-    [t("dashboard.overage"), before.overage_total, after.overage_total, delta.overage_total],
-    [t("dashboard.energy"), before.energy_total, after.energy_total, delta.energy_total],
-    [t("dashboard.total"), before.total, after.total, delta.total],
-  ];
-  if (showReserve) {
-    rows.push([T.reserveCredit, 0, -credit, -credit]);
-    rows.push([T.reserveNetAfter, before.total, afterNet, delta.net]);
-  }
-  const body = rows.map(([label, b, a, d]) => `<tr>
-      <td>${label}</td>
-      <td class="num">${fmt(b)}</td>
-      <td class="num">${fmt(a)}</td>
-      <td class="num${Number(d) < 0 ? " sim-delta--save" : ""}">${fmt(d)}</td>
-    </tr>`).join("");
-  return `<div class="btm-table-wrap">
-    <table class="btm-table btm-table--dash">
-      <thead><tr>
-        <th>${t("dashboard.item")}</th>
-        <th class="num">${T.simKpiBefore}</th>
-        <th class="num">${afterLabel}</th>
-        <th class="num">Δ</th>
-      </tr></thead>
-      <tbody>${body}</tbody>
-    </table>
-  </div>`;
-}
-
-function clearSimCompareBill() {
-  simCompareLoadId += 1;
-  simCompareBill = null;
-  simCompareKey = null;
-  simCompareFetch = null;
-}
-
-function simCompareCacheKey(res, row) {
-  if (!res || !row) return null;
-  const s2 = simViewContext === "full" ? simStage2At(res, row) : null;
-  const adopted = (s2 && s2.final && s2.final.stage2_contracts) || null;
-  return [
-    session.simulateResultKey || "",
-    simViewContext,
-    Number(row.pcs_kw),
-    Number(row.batt_kwh),
-    adopted ? JSON.stringify(adopted) : "scenario",
-  ].join("|");
-}
-
-function monthBillSubtotal(m) {
-  if (!m) return 0;
-  if (m.bill_total != null) return Number(m.bill_total) || 0;
-  const basic = m.basic_total != null ? m.basic_total : m.total;
-  const over = (m.overage && m.overage.total) || 0;
-  const energy = (m.energy && m.energy.total) || 0;
-  return Number(basic || 0) + Number(over || 0) + Number(energy || 0);
-}
-
-function simCompareDeltaCell(d) {
-  return `<td class="num${Number(d) < 0 ? " sim-delta--save" : ""}">${fmt(d)}</td>`;
-}
-
-function simCompareDeltaTotalsHtml(base, scheme, T, credit) {
-  const rows = [
-    [t("dashboard.basic"), base.basic_total, scheme.basic_total],
-    [t("dashboard.overage"), base.overage_total, scheme.overage_total],
-    [t("dashboard.energy"), base.energy_total, scheme.energy_total],
-    [t("dashboard.total"), base.total, scheme.total],
-  ];
-  if (Number(credit || 0) !== 0) {
-    const net = Number(scheme.total || 0) - Number(credit);
-    rows.push([T.reserveCredit, 0, -Number(credit)]);
-    rows.push([T.simCompareNet || T.simBillNet, base.total, net]);
-  }
-  const body = rows.map(([label, b, a]) => {
-    const d = Number(a || 0) - Number(b || 0);
-    return `<tr>
-      <td>${label}</td>
-      <td class="num">${fmt(b)}</td>
-      <td class="num">${fmt(a)}</td>
-      ${simCompareDeltaCell(d)}
+  const body = rows.map((row) => {
+    const pcsKey = Math.round(Number(row.pcs_kw) * 10) / 10;
+    const tier = tiers[pcsKey] ? `<small>${tiers[pcsKey]}</small>` : "";
+    return `<tr class="${simGridRowClass(row)}">
+      <td class="num">${fmt(row.pcs_kw, 0)}${tier}</td>
+      <td class="num">${fmt(row.batt_kwh, 0)}</td>
+      <td class="num">${fmt(row.hours, 1)}</td>
+      ${simSeasonMetricCells(row)}
+      <td class="num">${fmt(row.after_total)}</td>
+      <td class="num">${fmt(row.savings)}</td>
+      <td class="num">${fmt(row.savings_pct, 1)}%</td>
     </tr>`;
   }).join("");
-  return `<div class="btm-table-wrap">
-    <table class="btm-table btm-table--dash">
+  return `<div class="btm-table-wrap sim-grid-table-wrap">
+    <table class="btm-table btm-table--dash sim-grid-table">
       <thead><tr>
-        <th>${t("dashboard.item")}</th>
-        <th class="num">${T.simCompareBaseline}</th>
-        <th class="num">${T.simCompareScheme}</th>
-        <th class="num">Δ</th>
+        <th class="num">${T.simMapAxisPcs}</th>
+        <th class="num">${T.simMapAxisBatt}</th>
+        <th class="num">${T.simHours}</th>
+        ${simGridMetricTh(T.simPcsDailyAvg, T.summer)}
+        ${simGridMetricTh(T.simPcsDailyAvg, T.nonSummer)}
+        ${simGridMetricTh(T.simDailyCycle, T.summer)}
+        ${simGridMetricTh(T.simDailyCycle, T.nonSummer)}
+        <th class="num">${T.simAfterBill}</th>
+        <th class="num">${T.simSavings}</th>
+        <th class="num">${T.simKpiSavePct}</th>
       </tr></thead>
       <tbody>${body}</tbody>
     </table>
   </div>`;
 }
 
-function simCompareDeltaMonthsHtml(base, scheme, T) {
-  const map = new Map();
-  for (const m of base.months || []) {
-    map.set(String(m.month), { base: m, scheme: null });
-  }
-  for (const m of scheme.months || []) {
-    const key = String(m.month);
-    const cur = map.get(key) || { base: null, scheme: null };
-    cur.scheme = m;
-    map.set(key, cur);
-  }
-  const keys = [...map.keys()].sort();
-  if (!keys.length) return `<p class="btm-meta">—</p>`;
-  const body = keys.map((month) => {
-    const { base: bm, scheme: sm } = map.get(month);
-    const bb = monthBillSubtotal(bm);
-    const ss = monthBillSubtotal(sm);
-    return `<tr>
-      <td>${month}</td>
-      <td class="num">${fmt(bb)}</td>
-      <td class="num">${fmt(ss)}</td>
-      ${simCompareDeltaCell(ss - bb)}
-    </tr>`;
-  }).join("");
-  return `<div class="btm-table-wrap btm-table-wrap--tall">
-    <table class="btm-table btm-table--dash">
-      <thead><tr>
-        <th>${t("dashboard.monthCol")}</th>
-        <th class="num">${T.simCompareBaseline}</th>
-        <th class="num">${T.simCompareScheme}</th>
-        <th class="num">Δ</th>
-      </tr></thead>
-      <tbody>${body}</tbody>
-    </table>
-  </div>`;
-}
-
-function simCompareSingleBillHtml(bill, T) {
-  if (!bill) return `<p class="btm-meta">—</p>`;
-  return `<div class="sim-compare-single">
-    ${billSummaryHtml(bill)}
-    <h3 class="btm-section-title">${T.simCompareMonths || t("dashboard.months")}</h3>
-    ${billMonthsHtml(bill)}
-  </div>`;
-}
-
-function simCompareViewTabsHtml(T) {
-  const opts = [
-    ["delta", T.simCompareDelta],
-    ["baseline", T.simCompareBaseline],
-    ["scheme", T.simCompareScheme],
-  ];
-  return `<div class="btm-seg sim-compare-tabs" role="tablist" aria-label="${T.simCompareReport}">
-    ${opts.map(([id, label]) => {
-      const on = simCompareView === id;
-      return `<button type="button" class="btm-seg__btn${on ? " btm-seg__btn--active" : ""}"
-        data-sim-compare-view="${id}" role="tab" aria-selected="${on ? "true" : "false"}">${label}</button>`;
-    }).join("")}
-  </div>`;
-}
-
-function simBillCompareReportHtml(T, payload, { loading = false, err = null } = {}) {
-  const shell = (inner) => `<section class="btm-card hud-panel hud-frame sim-report sim-compare-report" id="simBillCompareReport">${inner}</section>`;
-  if (loading) {
-    return shell(`<h2 class="btm-card__title seetel-title">${T.simCompareReport}</h2>${busyBlockHtml(T.simCompareLoading)}`);
-  }
-  if (err) {
-    return shell(`<h2 class="btm-card__title seetel-title">${T.simCompareReport}</h2>
-      <p class="btm-meta btm-meta--err">${T.simCompareErr}: ${err}</p>`);
-  }
-  if (!payload || !payload.baseline || !payload.scheme) {
-    return shell(`<h2 class="btm-card__title seetel-title">${T.simCompareReport}</h2><p class="btm-meta">—</p>`);
-  }
-  const base = payload.baseline;
-  const scheme = payload.scheme;
-  const credit = Number((payload.reserve_income && payload.reserve_income.total) || 0);
-  let body = "";
-  if (simCompareView === "baseline") {
-    body = simCompareSingleBillHtml(base, T);
-  } else if (simCompareView === "scheme") {
-    body = simCompareSingleBillHtml(scheme, T);
-  } else {
-    body = `${simCompareDeltaTotalsHtml(base, scheme, T, credit)}
-      <h3 class="btm-section-title">${T.simCompareMonths || t("dashboard.months")}</h3>
-      ${simCompareDeltaMonthsHtml(base, scheme, T)}`;
-  }
-  return shell(`
-    <div class="sim-compare-report__head">
-      <h2 class="btm-card__title seetel-title">${T.simCompareReport}</h2>
-      ${simCompareViewTabsHtml(T)}
-    </div>
-    <div class="sim-compare-report__body">${body}</div>
-  `);
-}
-
-function syncSimReportKpisFromCompare(payload, res) {
-  const host = document.getElementById("simReportKpis");
-  if (!host || !res) return;
-  const T = I18N[locale].simulate;
-  const r = simSizingRow(res) || simViewBillRow(res) || (res.grid || [])[0];
-  if (!r) return;
-  const days = (payload && payload.baseline && billSpanDays(payload.baseline)) || simReportDays();
-  const beforeTotal = payload && payload.baseline && payload.baseline.total != null
-    ? Number(payload.baseline.total)
-    : Number((res.before && res.before.total) || 0);
-  const afterBill = Number(
-    r.after_total != null ? r.after_total : (res.after && res.after.total),
-  ) || 0;
-  const split = res.benefit_split || (res.stage2 && res.stage2.benefit_split) || null;
-  const billSave = r.bill_savings != null ? r.bill_savings : (beforeTotal - afterBill);
-  const sizingSave = split && split.sizing_savings != null ? split.sizing_savings : billSave;
-  const viable = !!res.viable;
-  const sizeLabel = viable ? T.simKpiSize : T.simTagBest;
-  const savePct = r.savings_pct != null
-    ? r.savings_pct
-    : (beforeTotal > 0 ? (100 * sizingSave / beforeTotal) : 0);
-  host.outerHTML = simReportKpisHtml(T, res, {
-    beforeTotal,
-    afterBill,
-    sizingSave,
-    savePct,
-    sizeLabel,
-    viable,
-    row: r,
-    days,
-  });
-}
-
-function bindSimCompareReport(res, T) {
-  document.querySelectorAll("[data-sim-compare-view]").forEach((btn) => {
-    btn.onclick = () => {
-      const next = btn.dataset.simCompareView;
-      if (!next || next === simCompareView) return;
-      simCompareView = next;
-      const el = document.getElementById("simBillCompareReport");
-      if (el && simCompareBill) {
-        el.outerHTML = simBillCompareReportHtml(T, simCompareBill);
-        bindSimCompareReport(res, T);
-      }
-    };
-  });
-}
-
-async function ensureSimCompareBill(res, T) {
-  const row = simViewBillRow(res) || simViewRow(res);
-  const host = document.getElementById("simBillCompareReport");
-  if (!host || !row || !session.importId) return;
-  const key = simCompareCacheKey(res, row);
-  if (!key) return;
-  if (simCompareBill && simCompareKey === key) {
-    host.outerHTML = simBillCompareReportHtml(T, simCompareBill);
-    bindSimCompareReport(res, T);
-    syncSimReportKpisFromCompare(simCompareBill, res);
-    return;
-  }
-  if (simCompareFetch && simCompareKey === key) {
-    host.outerHTML = simBillCompareReportHtml(T, null, { loading: true });
-    return;
-  }
-  const loadId = ++simCompareLoadId;
-  simCompareKey = key;
-  host.outerHTML = simBillCompareReportHtml(T, null, { loading: true });
-  readSimulateForm();
-  await ensureSettingsLoaded();
-  const fd = new FormData();
-  fd.append("import_id", session.importId);
-  if (!appendSimulateContractFields(fd)) {
-    const el = document.getElementById("simBillCompareReport");
-    if (el) el.outerHTML = simBillCompareReportHtml(T, null, { err: t("import.needSchema") });
-    return;
-  }
-  const s2Active = simActiveStage2(res);
-  const finalRow = (s2Active && s2Active.final)
-    || (res.stage2 && res.stage2.final)
-    || res.final
-    || null;
-  const adopted = (simViewContext === "full" && finalRow && finalRow.stage2_contracts)
-    ? finalRow.stage2_contracts
-    : null;
-  if (adopted) fd.append("scheme_contracts", JSON.stringify(adopted));
-  fd.append("simulate", JSON.stringify({ ...session.simulate }));
-  fd.append("pcs_kw", String(row.pcs_kw));
-  fd.append("batt_kwh", String(row.batt_kwh));
-  appendOverrides(fd);
-  simCompareFetch = apiJson("/api/simulate/compare-bill", { method: "POST", body: fd })
-    .then((data) => {
-      if (loadId !== simCompareLoadId) return null;
-      simCompareBill = data;
-      simCompareKey = key;
-      return data;
-    })
-    .catch((err) => {
-      if (loadId !== simCompareLoadId) return null;
-      simCompareBill = null;
-      throw err;
-    })
-    .finally(() => {
-      if (loadId === simCompareLoadId) simCompareFetch = null;
-    });
-  try {
-    const data = await simCompareFetch;
-    if (loadId !== simCompareLoadId) return;
-    const el = document.getElementById("simBillCompareReport");
-    if (el) {
-      el.outerHTML = simBillCompareReportHtml(T, data);
-      bindSimCompareReport(res, T);
-    }
-    syncSimReportKpisFromCompare(data, res);
-  } catch (err) {
-    if (loadId !== simCompareLoadId) return;
-    const el = document.getElementById("simBillCompareReport");
-    if (el) el.outerHTML = simBillCompareReportHtml(T, null, { err: String(err.message || err) });
-  }
+function clearSimAuxCaches() {
+  simPcsPowerMatrixCache = {};
 }
 
 function normalizeSimulateSizeResult(raw) {
@@ -4660,60 +4451,6 @@ function normalizeSimulateSizeResult(raw) {
   return simSeedStage2Map(out);
 }
 
-function simUnitSavings(row) {
-  const batt = Number(row?.batt_kwh) || 0;
-  if (batt <= 0) return 0;
-  return Number(row.savings || 0) / batt;
-}
-
-function simPcsUtilPct(row) {
-  const parts = row?.engineering_score_parts;
-  if (parts && parts.pcs_util_avg != null && Number.isFinite(Number(parts.pcs_util_avg))) {
-    return Number(parts.pcs_util_avg);
-  }
-  const vals = [row?.pcs_daily_avg_pct_summer, row?.pcs_daily_avg_pct_non_summer]
-    .map((v) => Number(v))
-    .filter((v) => Number.isFinite(v));
-  if (!vals.length) return 0;
-  return vals.reduce((a, b) => a + b, 0) / vals.length;
-}
-
-function simMapLegendHtml(T) {
-  return `<div class="sim-map-legend" aria-hidden="true">
-    <span class="sim-map-legend__item"><i class="sim-map-legend__swatch sim-map-legend__swatch--best"></i>${T.simMapBest || T.simViewRec}</span>
-    <span class="sim-map-legend__item"><i class="sim-map-legend__swatch sim-map-legend__swatch--size"></i>${T.simMapLegendSize}</span>
-    <span class="sim-map-legend__item"><i class="sim-map-legend__swatch sim-map-legend__swatch--color"></i>${T.simMapLegendColor}</span>
-    <span class="sim-map-legend__item">${T.simMapLegendMarks}</span>
-  </div>`;
-}
-
-function simViewWhyHtml(res, T) {
-  const mode = simViewMode;
-  const row = simViewRow(res, mode) || simSizingRow(res);
-  if (!row) return "";
-  let reason = "";
-  let title = T.simViewRec;
-  if (mode === "max_savings") {
-    reason = T.simReasonMaxSave;
-    title = T.simViewMaxSave;
-  } else if (mode === "max_util") {
-    reason = T.simReasonMaxUtil;
-    title = T.simViewMaxUtil;
-  }
-  const parts = row.engineering_score_parts || {};
-  const detail = mode === "recommended" && parts.cycle_util_avg != null
-    ? `<span class="sim-view-why__parts">${T.simSavings} ${fmt(parts.savings)} · ${T.simDailyCycle} ${fmt(parts.cycle_util_avg, 1)}%</span>`
-    : `<span class="sim-view-why__parts">${T.simConfigPcs} ${fmt(row.pcs_kw, 0)} kW · ${T.simConfigBatt} ${fmt(row.batt_kwh, 0)} kWh · ${T.simSavings} ${fmt(row.savings)}</span>`;
-  return `<div class="sim-view-why" id="simViewWhy">
-    <div class="sim-view-why__lead">
-      <span class="btm-chip btm-chip--on">${T.simWhyTitle}</span>
-      <strong>${title}</strong>
-      ${reason ? `<span class="btm-meta">${reason}</span>` : ""}
-    </div>
-    ${detail}
-  </div>`;
-}
-
 function renderSimSavingsChart(res, T) {
   const el = document.getElementById("simSavingsChart");
   if (!el || typeof echarts === "undefined" || !res || !(res.grid || []).length) return;
@@ -4725,88 +4462,55 @@ function renderSimSavingsChart(res, T) {
   }
 
   const gridRows = res.grid;
-  const pcsVals = gridRows.map((r) => Math.max(0, Number(r.pcs_kw) || 0));
-  const pcsMin = Math.min(...pcsVals);
-  const pcsMax = Math.max(...pcsVals);
-  const bubbleSize = (pcs) => {
-    if (!(pcsMax > pcsMin)) return 18;
-    return 12 + 30 * ((Math.max(0, pcs) - pcsMin) / (pcsMax - pcsMin));
-  };
-  const utilColor = (pct) => {
-    const t = Math.max(0, Math.min(1, Number(pct) / 100));
-    const r = Math.round(36 + 50 * t);
-    const g = Math.round(100 + 110 * t);
-    const b = Math.round(170 + 60 * t);
-    return `rgb(${r} ${g} ${b})`;
-  };
   const xyOf = (row) => [Number(row.savings) || 0, Number(row.batt_kwh) || 0];
 
+  const roleColor = { recommended: "#34d399", max_savings: "#fbbf24", max_util: "#a78bfa" };
+  const roleLabel = {
+    recommended: [T.simViewRec, "top"],
+    max_savings: [T.simViewMaxSave, "right"],
+    max_util: [T.simViewMaxUtil, "left"],
+  };
+  const pointRole = (p) => (
+    p.recommended ? "recommended" : p.best_effort ? "max_savings" : p.max_util ? "max_util" : ""
+  );
   const data = gridRows.map((p) => {
-    const util = simPcsUtilPct(p);
-    const isRec = !!p.recommended;
+    const role = pointRole(p);
+    const color = roleColor[role] || "#94a3b8";
+    const spec = roleLabel[role];
     return {
       value: xyOf(p),
-      symbolSize: bubbleSize(Number(p.pcs_kw) || 0) * (isRec ? 1.18 : 1),
+      symbolSize: 12,
       itemStyle: {
-        color: isRec ? "#34d399" : utilColor(util),
-        opacity: isRec ? 0.96 : 0.78,
-        borderColor: isRec ? "#ecfdf5" : "transparent",
-        borderWidth: isRec ? 2 : 0,
-        shadowBlur: isRec ? 14 : 0,
-        shadowColor: isRec ? "rgba(52,211,153,0.45)" : "transparent",
+        color,
+        opacity: role ? 0.95 : 0.78,
       },
+      label: spec ? {
+        show: true,
+        formatter: spec[0],
+        position: spec[1],
+        distance: 8,
+        color: "#f8fafc",
+        fontSize: 12,
+        fontWeight: 700,
+        backgroundColor: "rgba(8, 14, 22, 0.92)",
+        borderColor: color,
+        borderWidth: simViewMode === role ? 2 : 1,
+        borderRadius: 6,
+        padding: [4, 8],
+      } : { show: false },
       row: p,
     };
   });
-
-  const markPoint = { data: [], label: { fontSize: 11, fontWeight: 700 } };
-  const rec = gridRows.find((r) => r.recommended);
-  const be = gridRows.find((r) => r.best_effort);
-  const mu = gridRows.find((r) => r.max_util);
-  const recKey = simRowChartKey(rec);
-  if (rec) {
-    markPoint.data.push({
-      name: T.simMapBest || T.simViewRec,
-      coord: xyOf(rec),
-      symbol: "pin",
-      symbolSize: 60,
-      itemStyle: { color: "#34d399", shadowBlur: 16, shadowColor: "rgba(52,211,153,0.55)" },
-      label: { color: "#052e1a", formatter: T.simMapBest || T.simViewRec },
-      mode: "recommended",
-    });
-  }
-  if (be && simRowChartKey(be) !== recKey) {
-    markPoint.data.push({
-      name: T.simViewMaxSave,
-      coord: xyOf(be),
-      symbol: "pin",
-      symbolSize: 44,
-      itemStyle: { color: "#fbbf24" },
-      label: { color: "#1c1400", formatter: T.simViewMaxSave },
-      mode: "max_savings",
-    });
-  }
-  if (mu && simRowChartKey(mu) !== recKey && simRowChartKey(mu) !== simRowChartKey(be)) {
-    markPoint.data.push({
-      name: T.simViewMaxUtil,
-      coord: xyOf(mu),
-      symbol: "pin",
-      symbolSize: 44,
-      itemStyle: { color: "#a78bfa" },
-      label: { color: "#1a1028", formatter: T.simViewMaxUtil },
-      mode: "max_util",
-    });
-  }
 
   simSavingsChart = echarts.init(el);
   simSavingsChart.setOption({
     ...ECHART_NO_ANIM,
     backgroundColor: "transparent",
     grid: {
-      left: "4%",
-      right: "4%",
-      top: "12%",
-      bottom: "10%",
+      left: 28,
+      right: 72,
+      top: 36,
+      bottom: 28,
       containLabel: true,
     },
     tooltip: {
@@ -4847,16 +4551,19 @@ function renderSimSavingsChart(res, T) {
           return "";
         }
         const tags = [
-          row.recommended ? (T.simMapBest || T.simViewRec) : null,
+          row.recommended ? T.simViewRec : null,
           row.best_effort ? T.simViewMaxSave : null,
           row.max_util ? T.simViewMaxUtil : null,
-        ].filter(Boolean).join(" · ");
-        return `${tags ? `<b style="color:#5eeaff">${tags}</b><br>` : ""}`
-          + `${T.simMapAxisSave}: <b>${fmt(row.savings)}</b><br>`
-          + `${T.simMapAxisBatt || T.simConfigBatt}: <b>${fmt(row.batt_kwh, 0)}</b> kWh<br>`
-          + `${T.simConfigPcs}: ${fmt(row.pcs_kw, 0)} kW · ${T.simHours} ${fmt(row.hours, 1)}<br>`
-          + `${T.simChartPcsUtil}: ${fmt(simPcsUtilPct(row), 1)}%<br>`
-          + `${T.simBattBenefit || T.simChartUnitSavings}: ${fmt(simUnitSavings(row), 1)}`;
+        ].filter(Boolean);
+        const head = tags.length
+          ? `${tags.map((t) => `<b style="color:#5eeaff">${t}</b>`).join("<br>")}<br>`
+          : "";
+        const unit = simUnitSaveValue(row);
+        return `${head}${T.simConfigPcs} <b>${fmt(row.pcs_kw, 0)}</b> kW<br>`
+          + `${T.simConfigBatt} <b>${fmt(row.batt_kwh, 0)}</b> kWh<br>`
+          + `${T.simHours} <b>${fmt(row.hours, 1)}</b><br>`
+          + `${T.simMapAxisSave} <b>${fmt(row.savings)}</b>`
+          + (unit == null ? "" : `<br>${T.simUnitSave} <b>${fmt(unit, 1)}</b>`);
       },
     },
     xAxis: {
@@ -4886,7 +4593,6 @@ function renderSimSavingsChart(res, T) {
       type: "scatter",
       symbol: "circle",
       data,
-      markPoint,
       z: 2,
     }],
   });
@@ -4901,8 +4607,6 @@ function renderSimSavingsChart(res, T) {
       else if (row.max_util) mode = "max_util";
     }
     if (!mode) return;
-    const panel = document.getElementById("simViewPanel");
-    if (panel) panel.scrollIntoView({ behavior: "smooth", block: "start" });
     setSimViewMode(mode, res, T);
   });
 
@@ -4922,13 +4626,12 @@ function seedSimDispatchCache(res) {
     simDispatchChartPending = {};
     simDispatchCacheResultKey = resultKey;
     simViewMode = res?.viable ? "recommended" : "max_savings";
-    simViewContext = "sizing";
+    syncSimViewContext(res);
+    simPcsPowerMatrixCache = {};
   }
   const rec = res?.recommended || res?.best_effort;
   const base = simRowChartKey(rec);
-  const sizingCharts = res?.sizing_dispatch_charts || (
-    simHasFullContext(res, rec) ? null : res?.dispatch_charts
-  );
+  const sizingCharts = simHasFullContext(res, rec) ? null : res?.dispatch_charts;
   if (base && sizingCharts) {
     simDispatchChartCache[`${base}__sizing`] = sizingCharts;
     simDispatchChartCache[base] = sizingCharts;
@@ -4960,22 +4663,26 @@ function seedSimDispatchCache(res) {
 
 function simDispatchChartsForKey(res, key) {
   const row = simViewRow(res);
+  syncSimViewContext(res, row);
   const k = key
     || simDispatchChartKey
     || simChartCacheKey(row, simViewContext)
     || simRowChartKey(row);
   if (k && simDispatchChartCache[k]) return simDispatchChartCache[k];
-  // 後備：同 pcs/batt 無 context 後綴
   const base = simRowChartKey(row);
+  // Final：優先 Stage2 圖
+  const s2 = simActiveStage2(res);
+  if (s2 && s2.final && s2.final.dispatch_charts) {
+    if (!base || base === simRowChartKey(s2.final)) return s2.final.dispatch_charts;
+  }
+  if (base && simDispatchChartCache[`${base}__full`]) return simDispatchChartCache[`${base}__full`];
   if (base && simDispatchChartCache[base]) return simDispatchChartCache[base];
-  if (simViewContext === "full") {
-    const s2 = simActiveStage2(res);
-    if (s2 && s2.final && s2.final.dispatch_charts) return s2.final.dispatch_charts;
+  if (simWantsStage2(res) && !simHasFullContext(res, row)) return null;
+  if (base && base === simHighlightKey(res)) {
+    return res?.dispatch_charts || null;
   }
-  if (simViewContext === "sizing" && res?.sizing_dispatch_charts) {
-    return res.sizing_dispatch_charts;
-  }
-  return res?.dispatch_charts || null;
+  if (base && simDispatchChartCache[`${base}__sizing`]) return simDispatchChartCache[`${base}__sizing`];
+  return null;
 }
 
 function disposeSimDispatchCharts() {
@@ -5014,30 +4721,55 @@ function resizeSimDispatchCharts() {
   });
 }
 
+function simLookupDispatchCache(row, ctx) {
+  const base = simRowChartKey(row);
+  if (!base) return null;
+  const ctxKey = simChartCacheKey(row, ctx || simViewContext);
+  return (ctxKey && simDispatchChartCache[ctxKey])
+    || simDispatchChartCache[base]
+    || simDispatchChartCache[`${base}__sizing`]
+    || simDispatchChartCache[`${base}__full`]
+    || null;
+}
+
 async function fetchSimDispatchChartRow(row, T) {
   if (!row) return null;
   const key = simRowChartKey(row);
   if (!key) return null;
-  if (simDispatchChartCache[key]) return key;
+  const cached = simLookupDispatchCache(row);
+  if (cached) {
+    simDispatchChartCache[key] = cached;
+    const ctxKey = simChartCacheKey(row);
+    if (ctxKey) simDispatchChartCache[ctxKey] = cached;
+    return key;
+  }
   if (simDispatchChartPending[key]) return simDispatchChartPending[key];
   if (!session.importId) throw new Error(T.simErr);
   const resultKey = session.simulateResultKey;
   let request;
   request = (async () => {
     try {
-      const fd = new FormData();
-      fd.append("import_id", session.importId);
-      if (!appendSimulateContractFields(fd)) throw new Error(T.simErr);
-      fd.append("simulate", JSON.stringify(session.simulate));
-      fd.append("pcs_kw", String(row.pcs_kw));
-      fd.append("batt_kwh", String(row.batt_kwh));
-      appendOverrides(fd);
+      const live = normalizeSimulateSizeResult(session.lastSimulateSize);
+      const adopted = (row && row.stage2_contracts)
+        || simAdoptedSchemeContracts(live, row);
+      const fd = buildSimulateFormData({
+        simulateJson: (live && live._simulatePayload) || simFrozenPayload || undefined,
+        pcsKw: row.pcs_kw,
+        battKwh: row.batt_kwh,
+        schemeContracts: adopted || undefined,
+      });
+      if (!fd) throw new Error(T.simErr);
       const data = await apiJson("/api/simulate/dispatch-charts", { method: "POST", body: fd });
       if (resultKey !== session.simulateResultKey) return key;
       const charts = data && data.charts;
+      const ctx = adopted ? "full" : "sizing";
       if (charts) {
         simDispatchChartCache[key] = charts;
-        if (data.key && data.key !== key) simDispatchChartCache[data.key] = charts;
+        simDispatchChartCache[`${key}__${ctx}`] = charts;
+        if (data.key && data.key !== key) {
+          simDispatchChartCache[data.key] = charts;
+          simDispatchChartCache[`${data.key}__${ctx}`] = charts;
+        }
       }
       if (data) {
         if (data.energy_transfer) row.energy_transfer = data.energy_transfer;
@@ -5086,10 +4818,17 @@ async function ensureSimDispatchCharts(res, T) {
     setSimDispatchLoading(false);
     renderSimDispatchCharts(res, T);
     resizeSimDispatchCharts();
+    mountSimFollowCards(res, T);
   } catch (err) {
     if (loadId !== simDispatchChartLoadId) return;
     console.warn("sim dispatch lazy", err);
-    const meta = document.getElementById("simMeta");
+    const key = simRowChartKey(row);
+    const stored = normalizeSimulateSizeResult(session.lastSimulateSize);
+    const hit = stored && (stored.grid || []).find((g) => simRowChartKey(g) === key);
+    if (hit) hit._simChartsFailed = true;
+    if (row) row._simChartsFailed = true;
+    mountSimFollowCards(stored || res, T);
+    const meta = simVisibleMeta();
     setRunMeta(meta, `${T.simErr}: ${err.message || err}`, true);
   } finally {
     if (loadId === simDispatchChartLoadId) setSimDispatchLoading(false);
@@ -5116,10 +4855,7 @@ function simUniqueViewRows(res) {
 }
 
 async function prefetchSimViewCharts(res, T) {
-  const pending = simUniqueViewRows(res).filter((row) => {
-    const key = simRowChartKey(row);
-    return key && !simDispatchChartCache[key];
-  });
+  const pending = simUniqueViewRows(res).filter((row) => !simLookupDispatchCache(row));
   if (!pending.length) return;
   await Promise.all(pending.map((row) =>
     fetchSimDispatchChartRow(row, T).catch((err) => {
@@ -5140,14 +4876,18 @@ function simUtilScore(row) {
 
 function simViewTabMeta(row, T) {
   if (!row) return "—";
-  return `${fmt(row.pcs_kw, 0)} kW · ${fmt(row.batt_kwh, 0)} kWh
-    <br>${T.simSavings} ${fmt(row.savings)} · ${T.simChartPcsUtil} ${fmt(simPcsUtilPct(row), 1)}%`;
+  const line = (label, value) =>
+    `<span class="sim-view-tab__line"><span>${label}</span><b>${value}</b></span>`;
+  const unit = simUnitSaveValue(row);
+  return [
+    line(T.simConfigPcs, `${fmt(row.pcs_kw, 0)} kW`),
+    line(T.simConfigBatt, `${fmt(row.batt_kwh, 0)} kWh`),
+    line(T.simSavings, fmt(row.savings)),
+    unit == null ? "" : line(T.simUnitSave, fmt(unit, 1)),
+  ].join("");
 }
 
 function simViewTabsHtml(res, T) {
-  if (simViewContext === "full" && simHasFullContext(res)) {
-    return "";
-  }
   const modes = [
     { id: "recommended", label: T.simViewRec, cls: "rec", disabled: !res?.viable },
     { id: "max_savings", label: T.simViewMaxSave, cls: "save" },
@@ -5170,21 +4910,6 @@ function simViewTabsHtml(res, T) {
         <span class="sim-view-tab__label">${m.label}</span>
         <span class="sim-view-tab__meta">${simViewTabMeta(row, T)}</span>
       </button>`;
-    }).join("")}
-  </div>`;
-}
-
-function simViewContextHtml(res, T) {
-  if (!simHasFullContext(res)) return "";
-  const opts = [
-    { id: "sizing", label: T.simDispatchSizing },
-    { id: "full", label: T.simDispatchFull },
-  ];
-  return `<div class="btm-seg sim-view-context" role="tablist" aria-label="${T.simViewPanel}">
-    ${opts.map((o) => {
-      const on = simViewContext === o.id;
-      return `<button type="button" class="btm-seg__btn${on ? " btm-seg__btn--active" : ""}"
-        data-view-ctx="${o.id}" role="tab" aria-selected="${on ? "true" : "false"}">${o.label}</button>`;
     }).join("")}
   </div>`;
 }
@@ -5314,12 +5039,7 @@ function simDispatchFiltersHtml(dc, T) {
   ];
   const mOpts = metrics.map(([v, lab]) =>
     `<option value="${v}"${simDispatchFilter.heatmap === v ? " selected" : ""}>${lab}</option>`).join("");
-  return `<div class="sim-dispatch-toolbar sim-dispatch-filter-group">
-    <div class="sim-dispatch-toolbar__lead">
-      <span class="sim-dispatch-toolbar__title">${T.simDispatchFilter}</span>
-      <span class="sim-dispatch-toolbar__hint">${T.simDispatchFilterHint}</span>
-    </div>
-    <div class="sim-dispatch-toolbar__controls">
+  return `<div class="sim-dispatch-toolbar">
       <label class="ts-field"><span class="ts-field__label">${t("settings.season")}</span>
         <select class="ts-select" id="simDispatchSeason">${sOpts}</select></label>
       <label class="ts-field"><span class="ts-field__label">${t("settings.day")}</span>
@@ -5328,92 +5048,102 @@ function simDispatchFiltersHtml(dc, T) {
         <select class="ts-select" id="simDispatchMonth">${simDispatchMonthOptions(dc, T)}</select></label>
       <label class="ts-field"><span class="ts-field__label">${T.simDispatchMetric}</span>
         <select class="ts-select" id="simDispatchMetric">${mOpts}</select></label>
-    </div>
   </div>`;
 }
 
+function simHasViewBlocks(res) {
+  return !!(simViewRow(res, "max_savings") || res?.dispatch_charts);
+}
+
 function simViewPanelHtml(res, T) {
-  if (!simViewRow(res, "max_savings") && !res?.dispatch_charts && !res?.sizing_dispatch_charts) return "";
-  const row = simViewBillRow(res);
-  const dc = simDispatchChartsForKey(res) || (
-    simViewContext === "full" ? res.dispatch_charts : (res.sizing_dispatch_charts || res.dispatch_charts)
-  ) || null;
-  return `<section class="sim-view-panel btm-card hud-panel hud-frame" id="simViewPanel">
-    <h3 class="btm-subhead sim-view-panel__title">${T.simViewPanel}</h3>
-    ${simViewTabsHtml(res, T)}
-    <div id="simViewWhySlot">${simViewWhyHtml(res, T)}</div>
-    ${simViewContextHtml(res, T)}
-    <div id="simViewRecSlot">${renderReportRecSchedules(T, res)}</div>
-    ${simEnergyTransferHtml(res, T, row)}
-    <div class="sim-view-section">
-      <h4 class="sim-view-section__title">${T.simDispatchCharts}</h4>
-      <div class="sim-dispatch-load-msg" id="simDispatchLoadMsg" hidden></div>
-      ${simDispatchFiltersHtml(dc, T)}
-      <div id="simDispatchGridTop" class="sim-dispatch-grid sim-dispatch-grid--top">
-        <section class="sim-dispatch-panel">
-          <h5 class="sim-dispatch-panel__title">${T.simDispatchHourlySoc}</h5>
-          <div id="simHourlySocChart" class="sim-dispatch-chart"></div>
-        </section>
-        <section class="sim-dispatch-panel">
-          <h5 class="sim-dispatch-panel__title">${T.simDispatchHourlyPower}</h5>
-          <div id="simHourlyPowerChart" class="sim-dispatch-chart"></div>
-        </section>
-      </div>
-      <div id="simDispatchGridBottom" class="sim-dispatch-grid sim-dispatch-grid--bottom">
-        <section class="sim-dispatch-panel">
-          <h5 class="sim-dispatch-panel__title">${T.simDispatchHeatmap}</h5>
-          <div id="simDispatchHeatmap" class="sim-dispatch-chart sim-dispatch-chart--tall"></div>
-        </section>
-        <section class="sim-dispatch-panel">
-          <h5 class="sim-dispatch-panel__title">${T.simDispatchBoxplot}</h5>
-          <div id="simDispatchBoxplot" class="sim-dispatch-chart"></div>
-        </section>
-      </div>
-      <div id="simDispatchGridDay" class="sim-dispatch-grid sim-dispatch-grid--day">
-        <section class="sim-dispatch-panel sim-dispatch-panel--wide">
-          <h5 class="sim-dispatch-panel__title">${T.simDispatchDayProfile}
-            <span class="sim-dispatch-panel__hint">${T.simDispatchDayProfileHint}</span></h5>
-          <div id="simDayProfileChart" class="sim-dispatch-chart sim-dispatch-chart--tall"></div>
-          <div class="sim-dispatch-day-scrub" id="simDayScrub">
-            <button type="button" class="btm-btn btm-btn--ghost sim-dispatch-day-scrub__btn" id="simDayPrev" aria-label="prev">‹</button>
-            <input type="range" class="sim-dispatch-day-scrub__range" id="simDaySlider" min="0" max="0" value="0" step="1">
-            <button type="button" class="btm-btn btm-btn--ghost sim-dispatch-day-scrub__btn" id="simDayNext" aria-label="next">›</button>
-            <span class="sim-dispatch-day-scrub__label" id="simDayLabel">—</span>
-          </div>
-        </section>
-      </div>
+  if (!simHasViewBlocks(res)) return "";
+  const tabs = simViewTabsHtml(res, T);
+  if (!tabs) return "";
+  return `<div class="sim-view-panel" id="simViewPanel">${tabs}</div>`;
+}
+
+function simViewRecCardHtml(res, T) {
+  if (simViewDetailWaiting(res, simViewRow(res))) {
+    return simBusyCard("simViewRecCard", T.simRecSchedules, T.simViewBusy);
+  }
+  const body = renderReportRecSchedules(T, res);
+  if (!body) return "";
+  return `<section class="btm-card hud-panel hud-frame" id="simViewRecCard">
+    <h2 class="btm-card__title seetel-title">${T.simRecSchedules}</h2>
+    ${body}
+  </section>`;
+}
+
+function simDispatchCardHtml(res, T) {
+  if (!simHasViewBlocks(res)) return "";
+  const dc = simDispatchChartsForKey(res) || null;
+  if (!dc && simViewDetailWaiting(res, simViewRow(res))) {
+    return simBusyCard("simDispatchCard", T.simDispatchCharts, T.simViewBusy);
+  }
+  return `<section class="btm-card hud-panel hud-frame" id="simDispatchCard">
+    <h2 class="btm-card__title seetel-title">${T.simDispatchCharts}</h2>
+    <div class="sim-dispatch-load-msg" id="simDispatchLoadMsg" hidden></div>
+    ${simDispatchFiltersHtml(dc, T)}
+    <div id="simDispatchGridTop" class="sim-dispatch-grid sim-dispatch-grid--top">
+      <section class="sim-dispatch-panel">
+        <h5 class="sim-dispatch-panel__title">${T.simDispatchHourlySoc}</h5>
+        <div id="simHourlySocChart" class="sim-dispatch-chart"></div>
+      </section>
+      <section class="sim-dispatch-panel">
+        <h5 class="sim-dispatch-panel__title">${T.simDispatchHourlyPower}</h5>
+        <div id="simHourlyPowerChart" class="sim-dispatch-chart"></div>
+      </section>
+    </div>
+    <div id="simDispatchGridBottom" class="sim-dispatch-grid sim-dispatch-grid--bottom">
+      <section class="sim-dispatch-panel">
+        <h5 class="sim-dispatch-panel__title">${T.simDispatchHeatmap}</h5>
+        <div id="simDispatchHeatmap" class="sim-dispatch-chart sim-dispatch-chart--tall"></div>
+      </section>
+      <section class="sim-dispatch-panel">
+        <h5 class="sim-dispatch-panel__title">${T.simDispatchBoxplot}</h5>
+        <div id="simDispatchBoxplot" class="sim-dispatch-chart sim-dispatch-chart--tall"></div>
+      </section>
+    </div>
+    <div id="simDispatchGridDay" class="sim-dispatch-grid sim-dispatch-grid--day">
+      <section class="sim-dispatch-panel sim-dispatch-panel--wide">
+        <h5 class="sim-dispatch-panel__title">${T.simDispatchDayProfile}</h5>
+        <div id="simDayProfileChart" class="sim-dispatch-chart sim-dispatch-chart--tall"></div>
+        <div class="sim-dispatch-day-scrub" id="simDayScrub">
+          <button type="button" class="btm-btn btm-btn--ghost sim-dispatch-day-scrub__btn" id="simDayPrev" aria-label="prev">‹</button>
+          <input type="range" class="sim-dispatch-day-scrub__range" id="simDaySlider" min="0" max="0" value="0" step="1">
+          <button type="button" class="btm-btn btm-btn--ghost sim-dispatch-day-scrub__btn" id="simDayNext" aria-label="next">›</button>
+          <span class="sim-dispatch-day-scrub__label" id="simDayLabel">—</span>
+        </div>
+      </section>
     </div>
   </section>`;
 }
 
-function bindSimViewRecActions(root, res) {
-  (root || document).querySelectorAll("[data-sched-open-rec]").forEach((el) => {
-    el.addEventListener("click", () => {
-      const kind = el.dataset.schedOpenRec || "reserve";
-      simScheduleModal = kind === "tou" ? "tou-rec" : "reserve-rec";
-      syncScheduleModalHost();
-    });
-  });
-  (root || document).querySelectorAll("[data-apply-rec-manual]").forEach((el) => {
-    el.addEventListener("click", () => {
-      const kind = el.dataset.applyRecManual;
-      if (kind === "reserve") {
-        const rec = simReserveMetaFromResult(res)?.recommended_schedule;
-        if (!rec) return;
-        session.simulate.reserveScheduleMode = "manual";
-        session.simulate.reserveSchedule = normalizeScheduleMatrix(rec, defaultReserveHourly);
-        session.simulate.detailTab = "reserve";
-      } else if (kind === "tou") {
-        const rec = simTouMetaFromResult(res)?.recommended_schedule;
-        if (!rec) return;
-        session.simulate.touScheduleMode = "manual";
-        session.simulate.touSchedule = normalizeScheduleMatrix(rec, () => defaultTouSlots(activeSimulateTou()));
-        session.simulate.detailTab = "tou";
-      } else return;
-      persistSession();
-      renderPage({ animate: false, preserveScroll: true });
-    });
-  });
+function mountSimFollowCards(res, T) {
+  mountSimCard(
+    simViewRecCardHtml(res, T),
+    "simViewRecCard",
+    ["simDispatchCard"],
+  );
+  refreshSimReportHead(res, T);
+}
+
+function mountSimCard(html, id, beforeIds) {
+  const host = document.getElementById(id);
+  if (!html) {
+    if (host) host.remove();
+    return;
+  }
+  const tmp = document.createElement("div");
+  tmp.innerHTML = html.trim();
+  const next = tmp.firstElementChild;
+  if (!next) return;
+  if (host) {
+    host.replaceWith(next);
+    return;
+  }
+  const anchor = (beforeIds || []).map((x) => document.getElementById(x)).find(Boolean);
+  if (anchor) anchor.insertAdjacentElement("beforebegin", next);
 }
 
 async function refreshSimViewPanel(res, T) {
@@ -5430,61 +5160,23 @@ async function refreshSimViewPanel(res, T) {
     } else if (tabsHost && !tabsHtml) {
       tabsHost.remove();
     } else if (!tabsHost && tabsHtml) {
-      const title = panel.querySelector(".sim-view-panel__title");
-      if (title) {
-        const tmp = document.createElement("div");
-        tmp.innerHTML = tabsHtml;
-        title.insertAdjacentElement("afterend", tmp.firstElementChild);
-      }
-    }
-
-    const whySlot = document.getElementById("simViewWhySlot");
-    if (whySlot) whySlot.innerHTML = simViewWhyHtml(res, T);
-
-    const ctxHtml = simViewContextHtml(res, T);
-    const ctxHost = panel.querySelector(".sim-view-context");
-    if (ctxHost && ctxHtml) {
       const tmp = document.createElement("div");
-      tmp.innerHTML = ctxHtml;
-      if (tmp.firstElementChild) ctxHost.replaceWith(tmp.firstElementChild);
-    } else if (ctxHost && !ctxHtml) {
-      ctxHost.remove();
-    } else if (!ctxHost && ctxHtml) {
-      const anchor = document.getElementById("simViewWhySlot")
-        || panel.querySelector(".sim-view-tabs")
-        || panel.querySelector(".sim-view-panel__title");
-      if (anchor) {
-        const tmp = document.createElement("div");
-        tmp.innerHTML = ctxHtml;
-        if (tmp.firstElementChild) anchor.insertAdjacentElement("afterend", tmp.firstElementChild);
-      }
+      tmp.innerHTML = tabsHtml;
+      const node = tmp.firstElementChild;
+      const title = panel.querySelector(".sim-view-panel__title");
+      if (node && title) title.insertAdjacentElement("afterend", node);
+      else if (node) panel.prepend(node);
     }
   }
   document.querySelectorAll(".sim-view-tab").forEach((btn) => {
     btn.onclick = () => setSimViewMode(btn.dataset.mode, res, T);
   });
-  document.querySelectorAll("[data-view-ctx]").forEach((btn) => {
-    btn.onclick = () => setSimViewContext(btn.dataset.viewCtx, res, T);
-  });
 
-  const billEl = document.getElementById("simBillCompare");
-  if (billEl) billEl.innerHTML = simBillCompareHtml(res, T, row);
-  const etHost = document.getElementById("simEnergyTransfer");
-  if (etHost) {
-    const tmp = document.createElement("div");
-    tmp.innerHTML = simEnergyTransferHtml(res, T, row);
-    if (tmp.firstElementChild) etHost.replaceWith(tmp.firstElementChild);
-  }
-  const recSlot = document.getElementById("simViewRecSlot");
-  if (recSlot) {
-    // TOU 推薦排程屬量體；備轉入口在額外收益（僅推薦）
-    recSlot.innerHTML = renderReportRecSchedules(T, res);
-    bindSimViewRecActions(recSlot, res);
-  }
+  renderSimSavingsChart(res, T);
+  mountSimFollowCards(res, T);
 
   const controls = [
     ...document.querySelectorAll(".sim-view-tab"),
-    ...document.querySelectorAll("[data-view-ctx]"),
   ];
   controls.forEach((b) => { b.disabled = true; });
   try {
@@ -5492,35 +5184,22 @@ async function refreshSimViewPanel(res, T) {
   } finally {
     controls.forEach((b) => { b.disabled = false; });
   }
+  // 圖表就緒後重掛排程（含實際功率矩陣）
+  mountSimFollowCards(res, T);
 }
 
 async function setSimViewMode(mode, res, T) {
   if (!mode || simViewMode === mode) return;
-  const keepFull = simViewContext === "full";
   simViewMode = mode;
-  // 該點尚無 stage2 時不能停在 full
-  if (simViewContext === "full" && !simHasFullContext(res, simViewBaseRow(res, mode))) {
-    simViewContext = "sizing";
-  }
-  clearSimCompareBill();
   let live = normalizeSimulateSizeResult(session.lastSimulateSize) || res;
+  syncSimViewContext(live);
+  refreshSimReportHead(live, T);
+  const panelP = refreshSimViewPanel(live, T);
   live = await ensureStage2ForView(live, T);
-  if (keepFull && simHasFullContext(live)) simViewContext = "full";
+  syncSimViewContext(live);
+  await panelP;
   await refreshSimViewPanel(live, T);
   refreshSimReportHead(live, T);
-  await ensureSimCompareBill(live, T);
-}
-
-async function setSimViewContext(ctx, res, T) {
-  if (ctx !== "sizing" && ctx !== "full") return;
-  if (simViewContext === ctx) return;
-  if (ctx === "full" && !simHasFullContext(res, simViewBaseRow(res))) return;
-  simViewContext = ctx;
-  clearSimCompareBill();
-  const live = normalizeSimulateSizeResult(session.lastSimulateSize) || res;
-  await refreshSimViewPanel(live, T);
-  refreshSimReportHead(live, T);
-  await ensureSimCompareBill(live, T);
 }
 
 /** 若目前檢視點需要第二層且尚未快取，則請求 /full。 */
@@ -5540,33 +5219,79 @@ async function ensureStage2ForView(res, T) {
   }
 }
 
-async function fetchSimulateFullForRow(stageRes, row, T) {
+async function fetchSimulateFullForRow(stageRes, row, T, opts) {
+  const quiet = !!(opts && opts.quiet);
   if (!session.importId || !stageRes || !stageRes.stage1_key || !row) {
     return stageRes;
   }
-  const fd = new FormData();
-  fd.append("import_id", session.importId);
-  if (!appendSimulateContractFields(fd)) return stageRes;
-  fd.append("simulate", JSON.stringify(session.simulate));
-  fd.append("stage1_key", String(stageRes.stage1_key));
-  fd.append("pcs_kw", String(row.pcs_kw));
-  fd.append("batt_kwh", String(row.batt_kwh));
-  appendOverrides(fd);
+  const run = async () => {
+    let live = normalizeSimulateSizeResult(session.lastSimulateSize) || stageRes;
+    if (simStage2At(live, row)) return live;
+    const payload = simFrozenPayload
+      || live._simulatePayload
+      || stageRes._simulatePayload
+      || simulateApiJson();
+    const fd = buildSimulateFormData({
+      simulateJson: payload,
+      stage1Key: live.stage1_key || stageRes.stage1_key,
+      pcsKw: row.pcs_kw,
+      battKwh: row.batt_kwh,
+    });
+    if (!fd) return live;
 
-  simulateFullFetch = apiJson("/api/simulate/full", { method: "POST", body: fd });
-  if (parseRoute() === ROUTES.SIMULATE && T) {
-    refreshSimReportHead(stageRes, T);
-  }
-  try {
-    const full = await simulateFullFetch;
-    session._simFullError = null;
-    const merged = simMergeFullResult(stageRes, full);
-    session.lastSimulateSize = merged;
-    persistSession();
-    seedSimDispatchCache(merged);
-    return merged;
-  } finally {
-    simulateFullFetch = null;
+    simulateFullFetch = apiJson("/api/simulate/full", { method: "POST", body: fd });
+    if (!quiet && parseRoute() === ROUTES.SIMULATE && T) {
+      refreshSimReportHead(live, T);
+    }
+    try {
+      const full = await simulateFullFetch;
+      session._simFullError = null;
+      const merged = simMergeFullResult(live, full);
+      if (payload) merged._simulatePayload = payload;
+      session.lastSimulateSize = merged;
+      persistSession();
+      seedSimDispatchCache(merged);
+      return merged;
+    } finally {
+      simulateFullFetch = null;
+    }
+  };
+  const next = simulateFullChain.then(run, run);
+  simulateFullChain = next.then(() => {}, () => {});
+  return next;
+}
+
+/** 推薦點 /full 後，背景串行預取另外配置的 Stage2。 */
+async function prefetchStage2Siblings(res, T, jobId) {
+  if (!res || !simWantsStage2(res) || !res.stage1_key) return;
+  const token = ++simulateFullPrefetchToken;
+  const activeKey = simRowChartKey(simViewBaseRow(res));
+  const pending = simUniqueViewRows(res)
+    .filter((row) => !simStage2At(res, row))
+    .sort((a, b) => {
+      const aActive = simRowChartKey(a) === activeKey ? 1 : 0;
+      const bActive = simRowChartKey(b) === activeKey ? 1 : 0;
+      return aActive - bActive;
+    });
+  for (const row of pending) {
+    if (token !== simulateFullPrefetchToken || jobId !== simulateJob) return;
+    let live = normalizeSimulateSizeResult(session.lastSimulateSize) || res;
+    if (simStage2At(live, row)) continue;
+    try {
+      live = await fetchSimulateFullForRow(live, row, T, { quiet: true });
+    } catch (err) {
+      console.warn("sim stage2 prefetch", err);
+      return;
+    }
+    if (token !== simulateFullPrefetchToken || jobId !== simulateJob) return;
+    if (
+      parseRoute() === ROUTES.SIMULATE
+      && simRowChartKey(simViewBaseRow(live)) === simRowChartKey(row)
+    ) {
+      const lang = T || I18N[locale].simulate;
+      refreshSimReportHead(live, lang);
+      refreshSimViewPanel(live, lang);
+    }
   }
 }
 
@@ -5590,19 +5315,43 @@ async function retrySimulateFullStep() {
 }
 
 function refreshSimReportHead(res, T) {
+  const lang = T || I18N[locale].simulate;
   const host = document.getElementById("simReportHead");
-  if (!host || !res) return;
-  const html = simReportHeadHtml(T || I18N[locale].simulate, res);
-  if (!html) return;
-  const tmp = document.createElement("div");
-  tmp.innerHTML = html;
-  if (tmp.firstElementChild) {
-    host.replaceWith(tmp.firstElementChild);
-    const head = document.getElementById("simReportHead");
-    if (head) bindSimViewRecActions(head, res);
-    document.getElementById("btnSimulateFullRetry")?.addEventListener("click", () => {
-      retrySimulateFullStep();
-    });
+  if (host && res) {
+    const html = simReportHeadHtml(lang, res);
+    if (html) {
+      const tmp = document.createElement("div");
+      tmp.innerHTML = html;
+      if (tmp.firstElementChild) {
+        host.replaceWith(tmp.firstElementChild);
+        document.getElementById("btnSimulateFullRetry")?.addEventListener("click", () => {
+          retrySimulateFullStep();
+        });
+      }
+    }
+  }
+  // 配置卡在報告外；切換檢視時一併刷新。
+  // Stage2 pending 會暫時拿掉卡片，完成後必須能再插回（不能只 replace 既有節點）。
+  if (res) {
+    const kpiHtml = simReportSizeKpisBlock(lang, res);
+    const kpiHost = document.getElementById("simReportSizeKpis");
+    if (!kpiHtml) {
+      if (kpiHost) kpiHost.remove();
+    } else {
+      const tmp = document.createElement("div");
+      tmp.innerHTML = kpiHtml;
+      const next = tmp.firstElementChild;
+      if (!next) {
+        /* no-op */
+      } else if (kpiHost) {
+        kpiHost.replaceWith(next);
+      } else {
+        const report = document.getElementById("simReportHead");
+        const map = document.getElementById("simMapCard");
+        if (report) report.insertAdjacentElement("beforebegin", next);
+        else if (map) map.insertAdjacentElement("afterend", next);
+      }
+    }
   }
 }
 
@@ -5632,12 +5381,11 @@ function simDispatchHourlyFromHeatmap(dc, metric, seasonKey) {
 
 function simMetricHeatmapOption(dc, metric, unit) {
   const hm = dc?.heatmap?.[metric] || {};
-  const rng = dc?.ranges?.[metric] || {};
   const { dates, idxs } = simDispatchFilteredIndices(dc);
   const keepDates = idxs.map((i) => dates[i]);
   const keepValues = idxs.map((i) => (hm.values || [])[i] || []);
   const filtered = { dates: keepDates, values: keepValues };
-  const base = heatmapOption({ heatmap: filtered, kW: rng });
+  const base = heatmapOption({ heatmap: filtered });
   if (base.tooltip) {
     base.tooltip.formatter = (p) => {
       if (!p || !p.value) return "";
@@ -5981,9 +5729,6 @@ function bindSimDispatchCharts(res, T) {
   document.querySelectorAll(".sim-view-tab").forEach((btn) => {
     btn.onclick = () => setSimViewMode(btn.dataset.mode, res, T);
   });
-  document.querySelectorAll("[data-view-ctx]").forEach((btn) => {
-    btn.onclick = () => setSimViewContext(btn.dataset.viewCtx, res, T);
-  });
   if (seasonEl) {
     seasonEl.onchange = () => {
       simDispatchFilter.season = seasonEl.value;
@@ -6033,17 +5778,12 @@ function bindSimDispatchCharts(res, T) {
 
 function simulateRunKey() {
   try {
-    const {
-      detailTab: _detailTab,
-      seededImportKey: _seededImportKey,
-      ...simulate
-    } = session.simulate || {};
     return [
       session.importId || "",
       session.tou || "",
       session.voltage || "",
       JSON.stringify(session.contractValues || {}),
-      JSON.stringify(simulate),
+      simulateApiJson(session.simulate),
       JSON.stringify(session.rates || {}),
       JSON.stringify(session.schedule || {}),
       JSON.stringify(session.holidays || []),
@@ -6062,10 +5802,11 @@ function isSimulateResultStale() {
 function clearSimulateResult() {
   simulateJob += 1;
   simulateSampleJob += 1;
+  simulateFullPrefetchToken += 1;
   simulateFetch = null;
   simulateFullFetch = null;
   simulateSampleFetch = null;
-  simPinnedRun = null;
+  simFrozenPayload = null;
   simDispatchChartKey = null;
   simViewMode = "recommended";
   simViewContext = "sizing";
@@ -6085,8 +5826,124 @@ function clearSimulateResult() {
   session.simulateError = null;
   session.simulateResultKey = null;
   session._scrollSimReport = false;
-  clearSimCompareBill();
+  clearSimAuxCaches();
   persistSession();
+}
+
+/** 條件變更後樣本作廢；進配置再抓。半尖峰不在這支裡。 */
+let simSampleStamp = "";
+
+function simConditionStamp() {
+  const sim = session.simulate || {};
+  return JSON.stringify({
+    tou: activeSimulateTou(),
+    contracts: buildScenarioContracts(),
+    bufferPct: sim.bufferPct,
+    demandBufferKw: sim.demandBufferKw,
+    antiExportKw: sim.antiExportKw,
+    chargeEff: sim.chargeEff,
+    socMin: sim.socMin,
+    socMax: sim.socMax,
+    auto: !!sim.evaluateContractReduction || !!(sim.functions || []).includes("demand"),
+    strategies: sim.sizingStrategies,
+    energy: sim.sizingEnergySeeds,
+    mode: sim.sizingMode,
+  });
+}
+
+function markSimSampleStale() {
+  simSampleStamp = "";
+}
+
+function simWizardStep() {
+  const sim = session.simulate;
+  let step = sim && sim.wizardStep;
+  if (step === 2) step = "config";
+  else if (step === 3) step = "result";
+  else if (!["params", "fns", "config", "result"].includes(step)) step = "fns";
+  const running = !!(simulateFetch || simulateFullFetch);
+  const hasResult = !!normalizeSimulateSizeResult(session.lastSimulateSize);
+  if (hasResult) step = "result";
+  else if (!session.importId && step !== "fns") step = "fns";
+  else if (step === "result" && !running) step = "params";
+  if (sim) sim.wizardStep = step;
+  return step;
+}
+
+function simResultLocksSteps() {
+  return !!normalizeSimulateSizeResult(session.lastSimulateSize)
+    || !!simulateFetch
+    || !!simulateFullFetch;
+}
+
+function renderSimStepBar(T, step) {
+  const hasImport = !!session.importId;
+  const locked = simResultLocksSteps();
+  const items = [
+    { id: "fns", label: T.simStepFns, on: !locked },
+    { id: "config", label: T.simStepConfig, on: hasImport && !locked },
+    { id: "params", label: T.simStepParams, on: hasImport && !locked },
+    { id: "result", label: T.simStepResult, on: locked },
+  ];
+  return pageStepBar(items, step, "data-sim-step");
+}
+
+function renderSimFnsNav(T) {
+  if (!session.importId) return "";
+  return `<div class="sim-step-nav">
+    <button type="button" class="btm-btn btm-btn--primary" id="btnSimNextFns">${T.simNext}</button>
+  </div>`;
+}
+
+function renderSimConfigNav(T) {
+  return `<div class="sim-step-nav">
+    <button type="button" class="btm-btn btm-btn--ghost" id="btnSimBack">${T.simBack}</button>
+    <button type="button" class="btm-btn btm-btn--primary" id="btnSimNextConfig">${T.simNext}</button>
+  </div>`;
+}
+
+function simRunLocked() {
+  // 指定容量不走交叉取樣，取樣中仍可開始試算
+  const sampling = session.simulate?.sizingMode !== "single" && simulateSampleFetch;
+  return !!(simulateFetch || sampling || simulateFullFetch);
+}
+
+function renderSimParamsNav(T) {
+  const busy = simRunLocked();
+  const hasResult = !!normalizeSimulateSizeResult(session.lastSimulateSize);
+  const runBtn = hasResult
+    ? ""
+    : `<button type="button" class="btm-btn btm-btn--primary" id="btnSimulate"${busy ? " disabled" : ""}>${T.run}</button>`;
+  const err = session.simulateError
+    ? `<p class="btm-meta btm-meta--err" data-sim-meta>${T.simErr}: ${session.simulateError}</p>`
+    : `<p class="btm-meta btm-meta--hidden" data-sim-meta hidden></p>`;
+  return `<div class="sim-step-nav">
+    <button type="button" class="btm-btn btm-btn--ghost" id="btnSimBackParams">${T.simBack}</button>
+    ${runBtn}
+  </div>${err}`;
+}
+
+function simVisibleMeta() {
+  return document.querySelector(".sim-step:not(.sim-step--off) [data-sim-meta]")
+    || document.querySelector("[data-sim-meta]");
+}
+
+function refreshSimConfigStep() {
+  const host = document.getElementById("simStepConfig");
+  if (!host || parseRoute() !== ROUTES.SIMULATE) return false;
+  const T = I18N[locale].simulate;
+  host.innerHTML = renderSimStrategySection(T, session.simulate);
+  bindSimStrategyControls();
+  const run = document.getElementById("btnSimulate");
+  if (run) run.disabled = simRunLocked();
+  return true;
+}
+
+function paintSimSample() {
+  if (parseRoute() !== ROUTES.SIMULATE) return;
+  const step = session.simulate && session.simulate.wizardStep;
+  if (step === "config" && refreshSimConfigStep() && !simulateFetch && !simulateFullFetch) return;
+  renderPage({ animate: false, preserveScroll: true });
 }
 
 function renderSimRunBar(T) {
@@ -6109,7 +5966,6 @@ function renderSimRunBar(T) {
     metaMsg = T.simResultStale;
     metaErr = true;
   }
-  const runLabel = hasResult ? T.simRerun : T.run;
   const exportLabel = exporting ? T.simExporting : T.simExportXlsx;
   const exportBtn = hasResult && viewRow
     ? `<button type="button" class="btm-btn btm-btn--ghost" id="btnSimulateExport"${busy ? " disabled" : ""}>${exportLabel}</button>`
@@ -6118,25 +5974,15 @@ function renderSimRunBar(T) {
     ? `<button type="button" class="btm-btn btm-btn--ghost" id="btnSimulateClear"${busy ? " disabled" : ""}>${T.simClearResult}</button>`
     : "";
   const metaHtml = metaMsg
-    ? `<p class="btm-meta${metaErr ? " btm-meta--err" : ""}" id="simMeta">${metaMsg}</p>`
-    : `<p class="btm-meta btm-meta--hidden" id="simMeta" hidden></p>`;
+    ? `<p class="btm-meta${metaErr ? " btm-meta--err" : ""}" data-sim-meta>${metaMsg}</p>`
+    : `<p class="btm-meta btm-meta--hidden" data-sim-meta hidden></p>`;
 
   return `<div class="sim-run-bar">
     <div class="sim-run-bar__actions">
       ${exportBtn}
-      <button type="button" class="btm-btn btm-btn--primary" id="btnSimulate"${busy ? " disabled" : ""}>${runLabel}</button>
       ${clearBtn}
     </div>
     ${metaHtml}
-  </div>`;
-}
-
-function renderSimResultsBlock(T) {
-  return `<div class="sim-results">
-    ${renderSimStrategySection(T, session.simulate)}
-    ${renderSimLastRunCard(T)}
-    ${renderSimReportSection(T)}
-    ${renderSimRunBar(T)}
   </div>`;
 }
 
@@ -6147,13 +5993,6 @@ function renderSimReportSection(T) {
   const res = normalizeSimulateSizeResult(session.lastSimulateSize);
   // 尚無報告時，樣本階段先不佔位；已有報告則保留（勾選／半尖峰預覽取樣不拆報告）
   if (sampling && !sizing && !fulling && !res) return "";
-  if (sizing && simPinnedRun) {
-    const msg = res ? T.simRunningKeep : T.simSizingRunning;
-    return `<section class="btm-card hud-panel hud-frame sim-report sim-report--busy">
-      <h2 class="btm-card__title seetel-title">${T.simReport}</h2>
-      ${busyBlockHtml(msg)}
-    </section>`;
-  }
   if (!sizing && !fulling && !res) return "";
 
   if (sizing && !res) {
@@ -6175,7 +6014,6 @@ function activeSimulateSample() {
   return {
     profile_stats: res.profile_stats,
     grid_points: res.grid_points,
-    contract_adjustment: res.contract_adjustment,
   };
 }
 
@@ -6222,67 +6060,14 @@ function simStrategySampleRows(id, stats) {
   };
 }
 
+function bufferEngaged(sim) {
+  const s = sim || {};
+  return Number(s.demandBufferKw) > 0 || Number(s.antiExportKw) > 0 || Number(s.bufferPct) > 0;
+}
+
 function includeHalfPeakOn(sim) {
   if (activeSimulateTou() !== "ThreeStage") return false;
   return !!sim.includeHalfPeak;
-}
-
-function simBuildShortlist(stats, strategies, energyKeys) {
-  /** 對齊後端：功率 PCS × 電量電池 自由組合並去重。 */
-  if (!stats || !stats.ok) return [];
-  const pcsMap = stats.pcs_sample || {};
-  const energy = ((stats.energy_shift || {}).seeds) || {};
-  const ekeys = normalizeEnergySeeds(energyKeys);
-  const out = [];
-  const seen = new Set();
-  const add = (pcs, batt, source, seed, extra) => {
-    const pcsR = Math.round(Number(pcs) * 1000) / 1000;
-    const battR = Math.round(Number(batt) * 1000) / 1000;
-    if (!(pcsR > 0 && battR > 0)) return;
-    const key = `${pcsR}|${battR}`;
-    if (seen.has(key)) return;
-    seen.add(key);
-    out.push({
-      pcs_kw: pcsR,
-      batt_kwh: battR,
-      seed_source: source,
-      seed_id: seed,
-      ...(extra || {}),
-    });
-  };
-  const pcsOpts = [];
-  const pcsSeen = new Set();
-  for (const tid of strategies || []) {
-    const pcs = Math.round((Number(pcsMap[tid]) || 0) * 1000) / 1000;
-    if (!(pcs > 0) || pcsSeen.has(pcs)) continue;
-    pcsSeen.add(pcs);
-    pcsOpts.push({ pcs, tid });
-  }
-  const battOpts = [];
-  const battSeen = new Set();
-  for (const level of ekeys) {
-    const seed = energy[level] || {};
-    const batt = Math.round((Number(seed.batt_kwh) || 0) * 1000) / 1000;
-    if (!(batt > 0) || battSeen.has(batt)) continue;
-    battSeen.add(batt);
-    battOpts.push({ batt, level });
-  }
-  if (pcsOpts.length && battOpts.length) {
-    for (const p of pcsOpts) {
-      for (const b of battOpts) {
-        add(p.pcs, b.batt, "cross", `${p.tid}x${b.level}`, {
-          pcs_seed: p.tid,
-          energy_level: b.level,
-        });
-      }
-    }
-  } else if (!pcsOpts.length && battOpts.length) {
-    for (const level of ekeys) {
-      const seed = energy[level] || {};
-      add(seed.pcs_kw, seed.batt_kwh, "energy", level, { energy_level: level });
-    }
-  }
-  return out;
 }
 
 function simConfigSpecsPcsHtml(T, pcs) {
@@ -6348,10 +6133,45 @@ function renderSimStrategySection(T, sim) {
   const sampling = !!simulateSampleFetch;
   const sizing = !!simulateFetch;
   const busy = sampling;
-  const locked = busy || sizing;
-  const sample = sampling ? null : activeSimulateSample();
-  const showHalfToggle = activeSimulateTou() === "ThreeStage";
+  const single = sim.sizingMode === "single";
+  const locked = single ? sizing : (busy || sizing);
+  const showHalfToggle = !single && activeSimulateTou() === "ThreeStage";
   const halfOn = includeHalfPeakOn(sim);
+  const modeSwitch = `<div class="sim-schedule__switch" role="group" aria-label="${T.simSizingMode}">
+          <label class="sim-seg${!single ? " sim-seg--on" : ""}">
+            <input type="radio" name="sizingMode" value="grid"${!single ? " checked" : ""}${sizing ? " disabled" : ""}> ${T.simSizingModeGrid}
+          </label>
+          <label class="sim-seg${single ? " sim-seg--on" : ""}">
+            <input type="radio" name="sizingMode" value="single"${single ? " checked" : ""}${sizing ? " disabled" : ""}> ${T.simSizingModeSingle}
+          </label>
+        </div>`;
+  const halfSwitch = showHalfToggle
+    ? `<div class="sim-schedule__switch" role="group" aria-label="${T.simIncludeHalfPeak}">
+          <label class="sim-seg${halfOn ? " sim-seg--on" : ""}">
+            <input type="radio" name="includeHalfPeak" value="1"${halfOn ? " checked" : ""}${locked ? " disabled" : ""}> ${T.simIncludeHalfPeak}
+          </label>
+          <label class="sim-seg${!halfOn ? " sim-seg--on" : ""}">
+            <input type="radio" name="includeHalfPeak" value="0"${!halfOn ? " checked" : ""}${locked ? " disabled" : ""}> ${T.simIncludeHalfOff}
+          </label>
+        </div>`
+    : "";
+  const split = halfSwitch ? `<span class="btm-split" aria-hidden="true"></span>` : "";
+  const strategyHead = `<div class="sim-strategy__head">
+      <div class="sim-strategy__switches">${halfSwitch}${split}${modeSwitch}</div>
+    </div>`;
+  if (single) {
+    const pcsShown = Number(sim.manualPcsKw) > 0 ? sim.manualPcsKw : "";
+    const battShown = Number(sim.manualBattKwh) > 0 ? sim.manualBattKwh : "";
+    const manual = `<div class="btm-row">
+        ${simNumField("manualPcsKw", T.simManualPcs, pcsShown, 1, 0)}
+        ${simNumField("manualBattKwh", T.simManualBatt, battShown, 1, 0)}
+      </div>`;
+    return `<section class="btm-card hud-panel hud-frame sim-strategy${sizing ? " sim-strategy--busy" : ""}">
+      ${strategyHead}
+      ${manual}
+    </section>`;
+  }
+  const sample = sampling ? null : activeSimulateSample();
   const stats = profileStatsForHalfPeak(sample && sample.profile_stats, halfOn);
   const energy = ((stats && stats.energy_shift) || {}).seeds || {};
   const energyMeta = {
@@ -6360,21 +6180,6 @@ function renderSimStrategySection(T, sim) {
     p90: T.simEnergyP90,
     max: T.simEnergyMax,
   };
-  const halfToggle = showHalfToggle
-    ? `<div class="sim-halfpeak-row">
-        <div class="sim-halfpeak-row__lead">
-          <span class="sim-halfpeak-row__title">${T.simIncludeHalfPeak}</span>
-        </div>
-        <div class="sim-schedule__switch" role="group" aria-label="${T.simIncludeHalfPeak}">
-          <label class="sim-seg${halfOn ? " sim-seg--on" : ""}">
-            <input type="radio" name="includeHalfPeak" value="1"${halfOn ? " checked" : ""}${locked ? " disabled" : ""}> ${T.simIncludeHalfOn}
-          </label>
-          <label class="sim-seg${!halfOn ? " sim-seg--on" : ""}">
-            <input type="radio" name="includeHalfPeak" value="0"${!halfOn ? " checked" : ""}${locked ? " disabled" : ""}> ${T.simIncludeHalfOff}
-          </label>
-        </div>
-      </div>`
-    : "";
   const meta = {
     p50: { title: T.simStrategyP50 },
     p90: { title: T.simStrategyP90 },
@@ -6419,22 +6224,11 @@ function renderSimStrategySection(T, sim) {
     });
   }).join("");
 
-  const picked = normalizeSizingStrategies(sim.sizingStrategies);
-  const ekeys = normalizeEnergySeeds(sim.sizingEnergySeeds);
-  const shortlist = (!sampling && stats) ? simBuildShortlist(stats, picked, ekeys) : [];
-  let metaLine = "";
-  if (sample && !sampling) {
-    metaLine = T.simSampleMeta.replace("{pts}", shortlist.length);
-  }
-  const chip = sample && !sampling ? simContractAdjustChip(T, sample.contract_adjustment) : "";
+  const shortlist = (!sampling && sample && Array.isArray(sample.combinations))
+    ? sample.combinations
+    : [];
   const busyMsg = sampling
     ? (T.simStrategyRefreshing || T.simSampleRunning)
-    : "";
-  const footer = (metaLine || chip)
-    ? `<div class="sim-sample__footer">
-        ${metaLine ? `<span class="btm-chip btm-chip--dim">${metaLine}</span>` : ""}
-        ${chip}
-      </div>`
     : "";
 
   const energyCards = ENERGY_SEED_IDS.map((id) => {
@@ -6476,18 +6270,11 @@ function renderSimStrategySection(T, sim) {
     }).join("")
     : "";
 
-  const pcsDistinct = new Set(shortlist.map((c) => Number(c.pcs_kw))).size;
-  const battDistinct = new Set(shortlist.map((c) => Number(c.batt_kwh))).size;
   const pcsNums = shortlist.map((c) => Number(c.pcs_kw)).filter((n) => n > 0);
   const battNums = shortlist.map((c) => Number(c.batt_kwh)).filter((n) => n > 0);
-  const summaryLine = shortlist.length
-    ? (T.simShortlistSummary || "{pcs} × {batt} → {pts}")
-      .replace("{pcs}", String(pcsDistinct))
-      .replace("{batt}", String(battDistinct))
+  const summaryLine = (shortlist.length && pcsNums.length && battNums.length)
+    ? (T.simShortlistSummary || "{pts}")
       .replace("{pts}", String(shortlist.length))
-    : (T.simShortlistEmpty || "");
-  const rangeLine = (pcsNums.length && battNums.length)
-    ? (T.simShortlistRange || "")
       .replace("{pcsMin}", fmt(Math.min(...pcsNums), 0))
       .replace("{pcsMax}", fmt(Math.max(...pcsNums), 0))
       .replace("{battMin}", fmt(Math.min(...battNums), 0))
@@ -6495,14 +6282,11 @@ function renderSimStrategySection(T, sim) {
     : "";
   const hasResult = !!normalizeSimulateSizeResult(session.lastSimulateSize);
   const shortlistBlock = shortlist.length
-    ? `<div class="sim-shortlist">
-        <p class="sim-shortlist__summary">${summaryLine}${rangeLine ? ` · <span class="btm-meta">${rangeLine}</span>` : ""}</p>
-        <details class="sim-shortlist__fold">
-          <summary class="btm-meta">${T.simShortlistPreview}</summary>
-          <ol class="sim-shortlist__list">${previewRows}</ol>
-        </details>
-      </div>`
-    : (!sampling ? `<p class="btm-meta sim-shortlist__empty">${T.simShortlistEmpty}</p>` : "");
+    ? `<details class="sim-shortlist__fold">
+        <summary>${summaryLine}</summary>
+        <ol class="sim-shortlist__list">${previewRows}</ol>
+      </details>`
+    : "";
 
   const collapsedSummary = hasResult && !sampling
     ? `<summary class="sim-strategy__summary">
@@ -6512,263 +6296,184 @@ function renderSimStrategySection(T, sim) {
     : "";
 
   if (hasResult && !sampling) {
-    return `<details class="btm-card hud-panel hud-frame sim-strategy sim-strategy--collapsed"${sizing ? " open" : ""}>
+    return `<section class="btm-card hud-panel hud-frame sim-strategy">
+      ${strategyHead}
+      <details class="sim-strategy--collapsed"${sizing ? " open" : ""}>
       ${collapsedSummary}
       <div class="sim-strategy__body">
-        ${halfToggle}
         <h3 class="btm-subhead">${T.simPowerSeeds}</h3>
         <div class="sim-strategy__grid">${cards}</div>
         <h3 class="btm-subhead">${T.simEnergySeedsAuto}</h3>
         <div class="sim-strategy__grid">${energyCards}</div>
         ${shortlistBlock}
-        ${footer}
       </div>
-    </details>`;
+      </details>
+    </section>`;
   }
 
   return `<section class="btm-card hud-panel hud-frame sim-strategy${busy || sizing ? " sim-strategy--busy" : ""}">
-    <h2 class="btm-card__title seetel-title">${T.simStrategy}</h2>
-    ${halfToggle}
+    ${strategyHead}
     ${busy && busyMsg ? busyBlockHtml(busyMsg) : ""}
     <h3 class="btm-subhead">${T.simPowerSeeds}</h3>
     <div class="sim-strategy__grid">${cards}</div>
     <h3 class="btm-subhead">${T.simEnergySeedsAuto}</h3>
     <div class="sim-strategy__grid">${energyCards}</div>
     ${shortlistBlock}
-    ${footer}
   </section>`;
 }
 
-function simContractAdjustChip(T, adj) {
-  if (!adj || typeof adj !== "object" || adj.reason === "disabled") return "";
-  if (adj.applied) {
-    return `<span class="btm-chip btm-chip--on">${T.offPeakBoostApplied.replace("{kw}", fmt(adj.added_kw, 1))}</span>`;
-  }
-  return `<span class="btm-chip btm-chip--dim">${T.offPeakBoostSkipped}</span>`;
-}
+/** 試算報告功能卡：僅第2層契約容量／即時備轉。 */
+const SIM_FEATURE_CARDS = {
+  demand: {
+    icon: "fa-file-contract",
+    title: "simFeatureDemand",
+    metrics: ["regular_kw", "max_kw", "reducible_kw", "half_peak_delta_kw", "benefit"],
+  },
+  reserve: { icon: "fa-tower-broadcast", title: "simFeatureReserve", metrics: ["reserve_income", "benefit", "mode"] },
+};
 
-function simContractReductionChip(T, row) {
-  const cr = row && row.contract_reduction;
-  if (!cr || !(Number(cr.reducible_kw) > 0)) return "";
-  return `<span class="btm-chip btm-chip--on">${T.contractReductionSuggested
-    .replace("{kw}", fmt(cr.suggested_regular_kw, 1))
-    .replace("{cut}", fmt(cr.reducible_kw, 1))}</span>`;
-}
+const SIM_FEATURE_METRICS = {
+  mode: ["simMetricMode", "mode"],
+  buffer_kw: ["simMetricBuffer", "kw"],
+  regular_kw: ["simMetricRegular", "kw"],
+  max_kw: ["simMetricPeakMax", "kw"],
+  reducible_kw: ["simMetricReducible", "kw"],
+  half_peak_delta_kw: ["simMetricHalfPeakDelta", "kw"],
+  off_peak_added_kw: ["simMetricOffPeakReplace", "kw"],
+  allowance_kw: ["simContractAllowance", "kw"],
+  backup_kwh: ["simMetricBackup", "kwh"],
+  soc_min_pct: ["simMetricSocMin", "pct"],
+  reserve_income: ["simMetricReserveIncome", "money"],
+  benefit: ["simMetricBenefit", "money"],
+};
 
-function simCandIdLabel(T, id) {
-  if (id === "current") return T.simCandCurrent;
-  if (id === "peak_day_avg") return T.simCandDayAvg;
-  if (id === "p95") return T.simCandP95;
-  if (id === "max") return T.simCandMax;
-  return id || "—";
-}
+const SIM_FEATURE_REASONS = {
+  demand_buffer: "simReasonDemandBuffer",
+  contract_rule_adopted: "simReasonContractRuleAdopted",
+  contract_no_gain: "simReasonContractNoGain",
+  soc_floor: "simReasonSocFloor",
+  auto_bid: "simReasonAutoBid",
+  manual_bid: "simReasonManualBid",
+  no_net_gain: "simReasonNoNetGain",
+};
 
-function simCandRejectLabel(T, reason) {
-  if (!reason) return "";
-  if (reason === "exceed_peak") return T.simRejectExceedPeak;
-  if (reason === "exceed_half_peak") return T.simRejectExceedHalfPeak;
-  if (reason === "exceed_off_peak") return T.simRejectExceedOffPeak;
-  if (reason === "exceed_saturday_half_peak") return T.simRejectExceedSat;
-  return reason;
-}
-
-function simKwDeltaHtml(delta) {
-  const n = Number(delta) || 0;
-  if (Math.abs(n) < 0.05) return `<span class="btm-meta">0</span>`;
-  const sign = n > 0 ? "+" : "";
-  const cls = n > 0 ? "sim-delta--up" : "sim-delta--down";
-  return `<span class="${cls}">${sign}${fmt(n, 1)}</span>`;
-}
-
-function simMoneyDeltaHtml(delta) {
-  const n = Number(delta);
+function simFeatureMetricValue(T, key, value) {
+  const kind = SIM_FEATURE_METRICS[key]?.[1];
+  if (kind === "mode") return value === "manual" ? T.scheduleManual : T.scheduleAuto;
+  const n = Number(value);
   if (!Number.isFinite(n)) return "—";
-  if (Math.abs(n) < 0.5) return "0";
-  const sign = n > 0 ? "+" : "";
-  const cls = n > 0 ? "sim-delta--up" : "sim-delta--down";
-  return `<span class="${cls}">${sign}${fmt(n, 0)}</span>`;
+  if (kind === "money") return locale === "en" ? `${fmt(n)} NT$` : `${fmt(n)} 元`;
+  if (kind === "kw") return `${fmt(n, 1)} kW`;
+  if (kind === "kwh") return `${fmt(n, 1)} kWh`;
+  if (kind === "pct") return `${fmt(n, 1)}%`;
+  return fmt(n, 1);
 }
 
-function simFnStatusChipsHtml(T, res) {
-  const fns = new Set(res.functions || []);
-  const skipped = new Set(res.skipped || []);
-  const s2 = simActiveStage2(res);
-  const hasStage2 = !!(s2 && s2.enabled);
-  const finalRow = (s2 && s2.final) || res.final || null;
-  const reserveMeta = (finalRow && finalRow.reserve_meta) || res.reserve_meta || {};
-  const rolled = !!(reserveMeta.rolled_back || reserveMeta.reason === "no_net_gain");
-  const items = [
-    { label: simFnLabel("tou"), status: null },
-  ];
-  if (Number(session.simulate?.demandBufferKw) > 0) {
-    items.push({ label: simFnLabel("demand"), status: null });
+function simContractFieldLabel(T, key) {
+  const map = {
+    regular_kw: T.simContractRegular,
+    half_peak_kw: T.simContractHalfPeak,
+    non_summer_kw: T.simContractNonSummer,
+    saturday_half_peak_kw: T.simContractSatHalfPeak,
+    off_peak_kw: T.simContractOffPeak,
+  };
+  return map[key] || key;
+}
+
+/** 三段式四欄；兩段式用非夏月取代半尖。一律顯示（含 0）。 */
+function simContractDisplayKeys(...bags) {
+  const hasHalf = bags.some((b) => b && Object.prototype.hasOwnProperty.call(b, "half_peak_kw"));
+  const hasNonSummer = bags.some((b) => b && Number(b.non_summer_kw || 0) !== 0);
+  if (hasHalf || !hasNonSummer) {
+    return ["regular_kw", "half_peak_kw", "saturday_half_peak_kw", "off_peak_kw"];
   }
-  if (fns.has("backup")) {
-    items.push({ label: simFnLabel("backup"), status: null });
-  }
-  if (res.evaluate_contract_reduction || res.want_contract) {
-    items.push({
-      label: T.autoAdjustContract,
-      status: hasStage2 && finalRow && finalRow.selected_contract
-        ? T.simStatusAdopted
-        : (hasStage2 ? null : T.simStatusPending),
-    });
-  }
-  if (fns.has("reserve")) {
-    items.push({
-      label: simFnLabel("reserve"),
-      status: rolled
-        ? T.simStatusRolled
-        : (hasStage2 ? null : T.simStatusPending),
-    });
-  }
-  if ((session.simulate?.functions || []).includes("large_user")) {
-    const st = res.large_user_status === "pending"
-      ? T.simStatusPending
-      : (res.large_user_status === "ineligible" || skipped.has("large_user")
-        ? T.simStatusSkip
-        : null);
-    items.push({ label: simFnLabel("large_user"), status: st });
-  }
-  return `<div class="sim-fn-status">
-    ${items.map((it) => `<span class="btm-chip btm-chip--on">${it.label}${it.status ? ` · ${it.status}` : ""}</span>`).join("")}
+  return ["regular_kw", "non_summer_kw", "saturday_half_peak_kw", "off_peak_kw"];
+}
+
+function simContractCardsHtml(T, contracts, keys, { accent } = {}) {
+  const c = contracts || {};
+  const kw = (value) => `${fmt(value, 1)} <span class="sim-contract-card__unit">kW</span>`;
+  return `<div class="sim-contract-cards${accent ? " sim-contract-cards--accent" : ""}">
+    ${keys.map((k) => `
+      <article class="sim-contract-card">
+        <span class="sim-contract-card__label">${escapeHtml(simContractFieldLabel(T, k))}</span>
+        <strong class="sim-contract-card__value">${kw(c[k] ?? 0)}</strong>
+      </article>`).join("")}
   </div>`;
 }
 
-function simStage2ContractRecHtml(T, res, finalRow) {
-  const beforeC = (res.stage1 && res.stage1.contracts)
-    || (finalRow && finalRow.selected_contract && finalRow.selected_contract.id === "current"
-      ? (finalRow.selected_contract.contracts || {})
-      : null)
-    || {};
-  const formC = beforeC.regular_kw != null ? beforeC : (session.simulate && buildScenarioContracts()) || {};
-  const adopted = (finalRow && finalRow.stage2_contracts)
-    || (finalRow && finalRow.selected_contract && finalRow.selected_contract.contracts)
-    || {};
-  if (adopted.regular_kw == null && formC.regular_kw == null) return "";
-  const ceilings = (finalRow && finalRow.constraints && finalRow.constraints.ceilings) || {};
-  const rows = [
-    {
-      label: T.simContractRegular,
-      a: Number(formC.regular_kw) || 0,
-      b: Number(adopted.regular_kw != null ? adopted.regular_kw : formC.regular_kw) || 0,
-      ceil: ceilings.peak,
-    },
-    {
-      label: T.simContractHalfPeak,
-      a: Number(formC.half_peak_kw) || 0,
-      b: Number(adopted.half_peak_kw != null ? adopted.half_peak_kw : formC.half_peak_kw) || 0,
-      ceil: ceilings.half_peak,
-    },
-    {
-      label: T.simContractNonSummer || "非夏月契約",
-      a: Number(formC.non_summer_kw) || 0,
-      b: Number(adopted.non_summer_kw != null ? adopted.non_summer_kw : formC.non_summer_kw) || 0,
-      ceil: null,
-    },
-    {
-      label: T.simContractSatHalfPeak,
-      a: Number(formC.saturday_half_peak_kw) || 0,
-      b: Number(
-        adopted.saturday_half_peak_kw != null
-          ? adopted.saturday_half_peak_kw
-          : formC.saturday_half_peak_kw,
-      ) || 0,
-      ceil: ceilings.saturday_half_peak,
-    },
-    {
-      label: T.simContractOffPeak,
-      a: Number(formC.off_peak_kw) || 0,
-      b: Number(adopted.off_peak_kw != null ? adopted.off_peak_kw : formC.off_peak_kw) || 0,
-      ceil: ceilings.off_peak,
-    },
-  ].filter((r) => r.a > 0 || r.b > 0 || r.label === T.simContractRegular);
-  return `<div class="sim-stage2-table-wrap btm-table-wrap">
-    <h4 class="btm-subhead">${T.simContractRecTitle}</h4>
-    <table class="sim-stage2-table btm-table btm-table--dash">
-      <thead><tr>
-        <th>${T.simContractField}</th>
-        <th class="num">${T.simContractForm}</th>
-        <th class="num">${T.simContractAdopted}</th>
-        <th class="num">${T.simContractDelta}</th>
-        <th class="num">${T.simContractCeiling || "累計上限"}</th>
-      </tr></thead>
-      <tbody>${rows.map((r) => `<tr>
-        <td>${r.label}</td>
-        <td class="num">${fmt(r.a, 1)}</td>
-        <td class="num">${fmt(r.b, 1)}</td>
-        <td class="num">${simKwDeltaHtml(r.b - r.a)}</td>
-        <td class="num">${r.ceil != null ? fmt(r.ceil, 1) : "—"}</td>
-      </tr>`).join("")}</tbody>
-    </table>
-  </div>`;
+function simDemandDecisionHtml(T, summary) {
+  const d = summary.decision;
+  if (!d) return "";
+  const currentC = d.current_contracts || { regular_kw: d.current_regular_kw };
+  const selectedC = d.selected_contracts || { regular_kw: d.selected_regular_kw };
+  const fieldKeys = simContractDisplayKeys(currentC, selectedC);
+  return `
+    <div class="sim-contract-decision">
+      <div class="sim-contract-decision__stack">
+        <div class="sim-contract-decision__block">
+          <h5 class="sim-contract-decision__block-title">${escapeHtml(T.simContractCurrent)}</h5>
+          ${simContractCardsHtml(T, currentC, fieldKeys)}
+        </div>
+        <div class="sim-contract-decision__arrow" aria-hidden="true">
+          <i class="fa-solid fa-arrow-down"></i>
+        </div>
+        <div class="sim-contract-decision__block sim-contract-decision__block--final">
+          <h5 class="sim-contract-decision__block-title">${escapeHtml(T.simContractFinal)}</h5>
+          ${simContractCardsHtml(T, selectedC, fieldKeys, { accent: true })}
+        </div>
+      </div>
+    </div>`;
 }
 
-function simStage2CandidatesHtml(T, finalRow) {
-  const candRows = (finalRow && finalRow.contract_candidates) || [];
-  if (!candRows.length) return "";
-  const adoptedId = finalRow.selected_contract && finalRow.selected_contract.id;
-  return `<div class="sim-stage2-table-wrap btm-table-wrap">
-    <h4 class="btm-subhead">${T.simContractCandidates}</h4>
-    <table class="sim-stage2-table sim-stage2-table--cands btm-table btm-table--dash">
-      <thead><tr>
-        <th>${T.simCandStatus}</th>
-        <th>${T.simCandId}</th>
-        <th class="num">${T.simCandRegular}</th>
-        <th class="num">${T.simCandHalfPeak}</th>
-        <th class="num">${T.simCandOffPeakMove}</th>
-        <th class="num">${T.simCandFreeBoost}</th>
-        <th class="num">${T.simCandBill}</th>
-        <th>${T.simCandReason}</th>
-      </tr></thead>
-      <tbody>${candRows.map((c) => {
-        const adopted = c.id === adoptedId && c.feasible !== false;
-        const rejected = c.feasible === false;
-        const status = adopted
-          ? `<span class="btm-chip btm-chip--on">${T.simCandAdopted}</span>`
-          : rejected
-            ? `<span class="btm-chip btm-chip--warn">${T.simCandRejected}</span>`
-            : `<span class="btm-chip btm-chip--dim">${T.simCandFeasible}</span>`;
-        const trCls = adopted ? " class=\"sim-stage2-row--adopted\"" : (rejected ? " class=\"sim-stage2-row--reject\"" : "");
-        return `<tr${trCls}>
-          <td>${status}</td>
-          <td>${simCandIdLabel(T, c.id)}</td>
-          <td class="num">${fmt(c.regular_kw, 1)}</td>
-          <td class="num">${simKwDeltaHtml(c.half_peak_delta_kw || 0)}</td>
-          <td class="num">${fmt(c.off_peak_replaced_kw || 0, 1)}</td>
-          <td class="num">${fmt(c.free_off_peak_added_kw || 0, 1)}</td>
-          <td class="num">${c.bill_total != null ? fmt(c.bill_total, 0) : "—"}</td>
-          <td class="btm-meta">${simCandRejectLabel(T, c.reject_reason) || "—"}</td>
-        </tr>`;
-      }).join("")}</tbody>
-    </table>
-  </div>`;
+function simFeatureCardsHtml(T, res, onlyIds = null) {
+  const base = simViewBaseRow(res);
+  const row = simViewRow(res) || base;
+  // 不可回退到頂層推薦點的 feature_summaries，否則切換配置會顯示錯的契約／備轉評估
+  const summaries = simRowField(res, row, "feature_summaries") || [];
+  const allowed = onlyIds ? new Set(onlyIds) : null;
+  const statusKeys = {
+    adopted: "simStatusAdopted",
+    rolled_back: "simStatusRolled",
+    unchanged: "simStatusUnchanged",
+  };
+  const cards = summaries.flatMap((summary) => {
+    const cfg = SIM_FEATURE_CARDS[summary?.id];
+    if (!cfg || (allowed && !allowed.has(summary.id))) return [];
+    const values = Object.fromEntries((summary.metrics || []).map((metric) => [metric.key, metric.value]));
+    if (summary.benefit != null) values.benefit = summary.benefit;
+    const metrics = summary.id === "demand" && summary.decision ? "" : cfg.metrics.filter((key) => values[key] != null).slice(0, 4).map((key) => {
+      const label = T[SIM_FEATURE_METRICS[key]?.[0]] || key;
+      return `<div class="sim-strategy-card__metric"><span>${escapeHtml(label)}</span><strong>${escapeHtml(simFeatureMetricValue(T, key, values[key]))}</strong></div>`;
+    }).join("");
+    const status = summary.status || "unchanged";
+    const reason = T[SIM_FEATURE_REASONS[summary.reason]];
+    return [`
+      <article class="sim-fn-subcard sim-feature-card">
+        <div class="sim-fn-subcard__head">
+          <h4 class="sim-fn-subcard__title"><i class="fa-solid ${escapeHtml(cfg.icon)}" aria-hidden="true"></i>${escapeHtml(T[cfg.title])}</h4>
+          <span class="btm-chip sim-feature-card__status sim-feature-card__status--${escapeHtml(status)}">${escapeHtml(T[statusKeys[status]] || status)}</span>
+        </div>
+        ${summary.id === "demand" ? simDemandDecisionHtml(T, summary) : ""}
+        ${metrics ? `<div class="sim-strategy-card__metrics">${metrics}</div>` : ""}
+        ${reason && summary.id !== "demand" ? `<p class="sim-feature-card__reason">${escapeHtml(reason)}</p>` : ""}
+      </article>
+    `];
+  });
+  if (!cards.length) return "";
+  return `<section class="sim-feature-results"><div class="sim-feature-cards">${cards.join("")}</div></section>`;
 }
 
-function simStage2ReserveSummaryHtml(T, res, finalRow) {
-  const hasFn = (res.functions || []).includes("reserve");
-  const ri = (finalRow && finalRow.reserve_income) || res.reserve_income || {};
-  const credit = Number(ri.total || 0);
-  if (!hasFn && credit === 0) return "";
-  const meta = (finalRow && finalRow.reserve_meta) || res.reserve_meta || {};
-  const rolled = !!(meta.rolled_back || meta.reason === "no_net_gain");
-  const days = simReportDays();
-  const rec = meta.recommended_schedule;
-  const canViewRec = !!rec;
-  return `<div class="sim-stage2-reserve">
-    <h4 class="btm-subhead">${T.simReserveSummaryTitle}</h4>
-    <div class="dash-kpis sim-stage2-reserve__kpis">
-      ${dashKpiHtml(T.reserveIncomeTotal, credit, days, " dash-kpi--energy")}
-      ${dashKpiHtml(T.reserveIncomeCap, ri.capacity || 0, days)}
-      ${dashKpiHtml(T.reserveIncomePerf, ri.performance || 0, days)}
-    </div>
-    ${rolled ? `<p class="btm-meta btm-meta--err">${T.simReserveRolledBack}</p>` : ""}
-    <div class="sim-fn-subcard__actions">
-      ${canViewRec ? `<button type="button" class="btm-btn btm-btn--ghost" data-sched-open-rec="reserve">${T.simReserveBidRec}</button>` : ""}
-      ${canViewRec ? `<button type="button" class="btm-btn btm-btn--ghost" data-apply-rec-manual="reserve">${T.reserveUseAsManual}</button>` : ""}
-      <a class="btm-btn btm-btn--ghost" href="#simReservePanel">${T.simReserveViewDetail}</a>
-    </div>
-  </div>`;
+function simDemandPendingCardHtml(T) {
+  return `<section class="sim-feature-results">
+    <article class="sim-fn-subcard sim-feature-card sim-feature-card--pending">
+      <div class="sim-fn-subcard__head">
+        <h4 class="sim-fn-subcard__title"><i class="fa-solid fa-file-contract" aria-hidden="true"></i>${escapeHtml(T.simFeatureDemand)}</h4>
+        <span class="btm-chip sim-feature-card__status sim-feature-card__status--pending">${escapeHtml(T.simStatusPending)}</span>
+      </div>
+      <p class="sim-feature-card__reason">${escapeHtml(T.simContractPending)}</p>
+    </article>
+  </section>`;
 }
 
 function simReportHasContract(res) {
@@ -6784,102 +6489,128 @@ function simReportHasReserve(res) {
   return Number(ri.total || 0) !== 0;
 }
 
-function simReportExtrasBodyHtml(T, res) {
-  /** 契約／備轉明細（僅已開啟功能；無獨立卡片）。 */
-  const s2 = simActiveStage2(res);
-  const finalRow = (s2 && s2.final) || null;
-  if (!(s2 && s2.enabled) || !finalRow) return "";
-  const hasContract = simReportHasContract(res);
-  const hasReserve = simReportHasReserve(res);
-  if (!hasContract && !hasReserve) return "";
+function simBenefitReportOf(res, row) {
+  return simRowField(res, row || simViewRow(res) || simViewBaseRow(res), "benefit_report");
+}
 
-  const candFold = (() => {
-    if (!hasContract) return "";
-    const html = simStage2CandidatesHtml(T, finalRow);
-    if (!html) return "";
-    return `<details class="sim-stage2-cand-fold"><summary class="btm-meta">${T.simContractCandidates}</summary>${html}</details>`;
-  })();
+function simBenefitMoney(T, value) {
+  const n = Number(value);
+  return Number.isFinite(n)
+    ? (locale === "en" ? `${fmt(n)} NT$` : `${fmt(n)} 元`)
+    : "—";
+}
 
-  return `<div class="sim-report-extras" id="simStage2">
-    ${hasContract ? simStage2ContractRecHtml(T, res, finalRow) : ""}
-    ${candFold}
-    ${hasReserve ? simStage2ReserveSummaryHtml(T, res, finalRow) : ""}
-    ${hasReserve ? renderReserveReportBlock(T, res) : ""}
+function simBenefitDeltaHtml(T, part) {
+  if (!part) return "";
+  const benefit = Number(part.benefit || 0);
+  const benefitLabel = benefit >= 0 ? T.simBenefitAmount : T.simBenefitIncrease;
+  const benefitClass = benefit >= 0 ? " sim-delta--save" : " sim-delta--up";
+  return `<div class="sim-benefit-delta">
+    <div><span>${escapeHtml(T.simBenefitBefore)}</span><strong>${escapeHtml(simBenefitMoney(T, part.before))}</strong></div>
+    <i class="fa-solid fa-arrow-right" aria-hidden="true"></i>
+    <div><span>${escapeHtml(T.simBenefitAfter)}</span><strong>${escapeHtml(simBenefitMoney(T, part.after))}</strong></div>
+    <div class="sim-benefit-delta__amount${benefitClass}">
+      <span>${escapeHtml(benefitLabel)}</span>
+      <strong>${escapeHtml(simBenefitMoney(T, Math.abs(benefit)))}</strong>
+    </div>
   </div>`;
 }
 
+function simBenefitBasicSourceLabel(T, source) {
+  if (source === "both") return T.simBenefitBasicSourceBoth;
+  if (source === "contract") return T.simBenefitBasicSourceContract;
+  if (source === "plan") return T.simBenefitBasicSourcePlan;
+  return "";
+}
+
+function simBenefitReportSectionsHtml(T, res, row) {
+  const report = simBenefitReportOf(res, row);
+  if (!report || !report.sections) return "";
+  const { basic, energy, overage, extra } = report.sections;
+  const basicSource = simBenefitBasicSourceLabel(T, basic?.source);
+  const basicSection = `
+    <section class="sim-benefit-section" data-benefit-section="basic">
+      <div class="sim-benefit-section__head">
+        <h3><i class="fa-solid fa-file-contract" aria-hidden="true"></i>${escapeHtml(T.simBenefitBasic)}</h3>
+        ${basicSource ? `<span class="btm-chip btm-chip--dim">${escapeHtml(basicSource)}</span>` : ""}
+      </div>
+      ${simBenefitDeltaHtml(T, basic)}
+      ${simFeatureCardsHtml(T, res, ["demand"])}
+    </section>`;
+
+  const overageSection = `
+    <section class="sim-benefit-section" data-benefit-section="overage">
+      <div class="sim-benefit-section__head">
+        <h3><i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i>${escapeHtml(T.simBenefitOverage)}</h3>
+      </div>
+      ${simBenefitDeltaHtml(T, overage)}
+    </section>`;
+
+  const energySection = `
+    <section class="sim-benefit-section" data-benefit-section="energy">
+      <div class="sim-benefit-section__head">
+        <h3><i class="fa-solid fa-bolt" aria-hidden="true"></i>${escapeHtml(T.simBenefitEnergy)}</h3>
+      </div>
+      ${simBenefitDeltaHtml(T, energy)}
+      ${simEnergyTransferHtml(res, T, row, { embedded: true })}
+    </section>`;
+
+  const extraMetrics = !extra?.visible ? "" : `
+    <div class="sim-benefit-extra">
+      <div><span>${escapeHtml(T.simBenefitReserveCapacity)}</span><strong>${escapeHtml(simBenefitMoney(T, extra.capacity))}</strong></div>
+      <div><span>${escapeHtml(T.simBenefitReservePerformance)}</span><strong>${escapeHtml(simBenefitMoney(T, extra.performance))}</strong></div>
+      <div><span>${escapeHtml(T.simBenefitReserveActivation)}</span><strong>${escapeHtml(simBenefitMoney(T, extra.activation_energy))}</strong></div>
+      <div class="sim-benefit-extra__total"><span>${escapeHtml(T.simBenefitAmount)}</span><strong>${escapeHtml(simBenefitMoney(T, extra.benefit))}</strong></div>
+    </div>`;
+  const extraSection = !extra?.visible ? "" : `
+    <section class="sim-benefit-section" data-benefit-section="extra">
+      <div class="sim-benefit-section__head">
+        <h3><i class="fa-solid fa-tower-broadcast" aria-hidden="true"></i>${escapeHtml(T.simBenefitExtra)}</h3>
+      </div>
+      ${extraMetrics}
+      ${simFeatureCardsHtml(T, res, ["reserve"])}
+    </section>`;
+
+  return `<div class="sim-benefit-sections">${basicSection}${overageSection}${energySection}${extraSection}</div>`;
+}
+
 function simReportKpisHtml(T, res, {
-  beforeTotal,
-  afterBill,
-  sizingSave,
-  savePct,
   sizeLabel,
   viable,
   row,
   days,
 } = {}) {
-  const s2 = simActiveStage2(res);
-  const split = (s2 && s2.benefit_split)
-    || (res && (res.benefit_split || (res.stage2 && res.stage2.benefit_split)))
-    || null;
-  const hasContract = simReportHasContract(res);
-  const hasReserve = simReportHasReserve(res);
-  const hasStage2 = !!(s2 && s2.enabled && s2.final);
-  const evaluating = !!simulateFullFetch;
-  const sizing = sizingSave != null
-    ? Number(sizingSave)
-    : Number(split && split.sizing_savings != null ? split.sizing_savings : 0);
-  const contractGain = hasContract
-    ? Number(hasStage2 && split ? (split.contract_gain || 0) : 0)
-    : null;
-  const reserveGain = hasReserve
-    ? Number(hasStage2 && split ? (split.reserve_gain || 0) : 0)
-    : null;
-  const totalBenefit = (hasContract || hasReserve) && hasStage2 && split && split.total != null
-    ? Number(split.total)
-    : sizing + (contractGain || 0) + (reserveGain || 0);
-  const saveKpiClass = Number(totalBenefit) >= 0 ? " dash-kpi--energy" : " dash-kpi--loss";
-  const sizingCls = Number(sizing) >= 0 ? " dash-kpi--energy" : " dash-kpi--loss";
-  const pending = (hasContract || hasReserve) && !hasStage2 && evaluating;
+  const report = simBenefitReportOf(res, row);
+  const summary = report?.summary || {};
+  // 切換非推薦點重跑 Stage2 時，尚無該點 benefit_report；仍視為 pending
+  const pending = !!summary.pending || (!report && simStage2Pending(res));
+  const totalBenefit = pending || summary.total_benefit == null
+    ? null
+    : Number(summary.total_benefit);
+  const saveKpiClass = totalBenefit == null
+    ? ""
+    : (Number(totalBenefit) >= 0 ? " dash-kpi--energy" : " dash-kpi--loss");
+  const bill = pending || summary.after_bill_total == null
+    ? null
+    : Number(summary.after_bill_total);
 
-  return `<div class="dash-kpis sim-report__kpis" id="simReportKpis">
-    ${dashKpiHtml(T.simKpiBefore, beforeTotal, days)}
-    ${dashKpiHtml(T.simBillSizingOnly || T.simKpiAfter, afterBill, days)}
-    ${dashKpiHtml(T.simBenefitSizing || T.simKpiBillSave, sizing, days, sizingCls)}
-    ${hasContract ? dashKpiHtml(
-      T.simBenefitContract,
-      hasStage2 ? contractGain : null,
-      days,
-      " dash-kpi--energy",
-    ) : ""}
-    ${hasReserve ? dashKpiHtml(
-      T.simBenefitReserve,
-      hasStage2 ? reserveGain : null,
-      days,
-      " dash-kpi--energy",
-    ) : ""}
-    ${dashKpiHtml(T.simKpiTotalBenefit, pending ? null : totalBenefit, days, saveKpiClass)}
+  return `<div class="sim-report-size-kpis" id="simReportSizeKpis">
+    <div class="dash-kpis sim-report__kpis" id="simReportKpis">
     ${row ? `<article class="dash-kpi hud-panel hud-frame${viable ? " dash-kpi--total" : ""}">
-      <div class="dash-kpi__label">${sizeLabel}</div>
+      <div class="dash-kpi__label">${sizeLabel || T.simKpiSize}</div>
       <div class="dash-kpi__value sim-size-kpi">${fmt(row.pcs_kw, 0)} <span>kW</span> / ${fmt(row.batt_kwh, 0)} <span>kWh</span></div>
-      <div class="dash-kpi__annual"><span>${T.simHours}</span> <strong>${fmt(row.hours, 1)}</strong>
-      · <span>${T.simKpiSavePct}</span> <strong>${fmt(savePct, 1)}%</strong></div>
     </article>` : ""}
+    ${dashKpiHtml(T.simBillAfterBess || T.simKpiAfter, pending ? null : bill, days)}
+    ${dashKpiHtml(T.simKpiTotalBenefit, totalBenefit, days, saveKpiClass)}
+    </div>
   </div>`;
 }
 
-function simStage2SectionHtml(T, res) {
-  // 保留函式名相容；已併入試算報告
-  return simReportExtrasBodyHtml(T, res);
-}
-
-function simReportHeadHtml(T, res) {
+function simReportSizeKpisBlock(T, res) {
+  /** 配置結果卡：放在地圖下方（最終結果），不塞進試算報告標題區。 */
   const baseRow = simViewBaseRow(res) || simSizingRow(res) || res.best_effort || (res.grid || [])[0];
   if (!baseRow) return "";
-  const s2 = simActiveStage2(res);
-  const r = (simViewContext === "full" && s2 && s2.final)
-    ? simMergeStage2Row(baseRow, s2)
-    : baseRow;
+  const r = simViewRow(res) || baseRow;
   const viable = !!res.viable;
   const days = simReportDays();
   const sizeLabel = (() => {
@@ -6887,92 +6618,50 @@ function simReportHeadHtml(T, res) {
     if (simViewMode === "max_util") return T.simViewMaxUtil || T.simTagBest;
     return viable ? T.simKpiSize : T.simTagBest;
   })();
-  const finalRow = (s2 && s2.enabled && s2.final) || null;
-  const hasStage2 = !!finalRow;
+  return simReportKpisHtml(T, res, {
+    sizeLabel,
+    viable,
+    row: r,
+    days,
+  });
+}
 
-  const beforeTotal = Number((res.before && res.before.total)
-    || (r.before && r.before.total)) || 0;
-  // 量體電費：一律用 stage1 列；full 情境 KPI 仍先顯示量體 after，效益拆分看 stage2
-  const sizingAfter = Number(
-    baseRow.after_total != null ? baseRow.after_total : (res.after && res.after.total),
-  ) || 0;
-  const billSave = baseRow.bill_savings != null
-    ? baseRow.bill_savings
-    : (beforeTotal - sizingAfter);
-  const split = (s2 && s2.benefit_split)
-    || res.benefit_split
-    || (res.stage2 && res.stage2.benefit_split)
-    || null;
-  const sizingSave = split && split.sizing_savings != null
-    ? split.sizing_savings
-    : (baseRow.savings != null && !(simReportHasContract(res) || simReportHasReserve(res))
-      ? baseRow.savings
-      : billSave);
-  const savePct = r.savings_pct != null ? r.savings_pct : (
-    beforeTotal > 0 ? (100 * sizingSave / beforeTotal) : res.savings_pct
-  );
-  const metaLine = T.simSampleMetaDone
-    .replace("{pts}", res.grid_points != null ? res.grid_points : (res.grid || []).length);
-
-  let stage2Warn = "";
-  const warnKey = (hasStage2 && finalRow.stage2_warning) || r.stage2_warning || res.stage2_warning;
-  if (warnKey === "stage2_benefit_much_lower") {
-    stage2Warn = `<p class="sim-report__warn btm-meta btm-meta--err">${T.stage2WarningLower}</p>`;
-  } else if (warnKey === "stage2_overage_worse") {
-    stage2Warn = `<p class="sim-report__warn btm-meta btm-meta--err">${T.stage2WarningOverage}</p>`;
-  } else if (warnKey === "reserve_no_net_gain") {
-    stage2Warn = `<p class="sim-report__warn btm-meta btm-meta--err">${T.reserveNoNetGain}</p>`;
-  }
-
-  const evaluating = !!simulateFullFetch;
+function simReportHeadHtml(T, res) {
+  const baseRow = simViewBaseRow(res) || simSizingRow(res) || res.best_effort || (res.grid || [])[0];
+  if (!baseRow) return "";
+  syncSimViewContext(res, baseRow);
+  const pending = simStage2Pending(res);
+  const evaluating = !!simulateFullFetch || pending;
   const evalBanner = evaluating
     ? `<div class="sim-report__eval">${busyBlockHtml(T.simEvaluatingExtras)}</div>`
     : "";
   const fullFail = !!session._simFullError;
-  const failBanner = fullFail && !evaluating
+  const failBanner = fullFail && !simulateFullFetch
     ? `<p class="sim-report__warn btm-meta btm-meta--err">${T.simFullFailedKeep}
         <button type="button" class="btm-btn btm-btn--ghost" id="btnSimulateFullRetry">${T.simFullRetry}</button>
       </p>`
     : "";
 
-  const extrasBody = evaluating ? "" : simReportExtrasBodyHtml(T, res);
+  // 第二層未完成：契約卡保留評估狀態；配置 KPI 在地圖下方另渲染
+  if (pending) {
+    return `<section class="btm-card hud-panel hud-frame sim-report" id="simReportHead">
+      <h2 class="btm-card__title seetel-title">${T.simReport}</h2>
+      ${evalBanner}
+      ${failBanner}
+      ${simReportHasContract(res) ? simDemandPendingCardHtml(T) : ""}
+    </section>`;
+  }
+
+  const viable = !!res.viable;
   const warn = viable
     ? ""
     : `<p class="sim-report__warn btm-meta btm-meta--err">${T.simNoViable}</p>`;
 
-  const baseTou = res.baseline_tou_type || importPlanTou();
-  const simTou = res.simulate_tou_type || activeSimulateTou();
-  const planChips = baseTou === simTou
-    ? `<span class="btm-chip btm-chip--on">${T.simReportSimulateTou}: ${simTou}</span>`
-    : `<span class="btm-chip btm-chip--dim">${T.simReportBaselineTou}: ${baseTou}</span>
-      <span class="btm-chip btm-chip--on">${T.simReportSimulateTou}: ${simTou}</span>`;
-  const periodDays = days > 0
-    ? `<span class="btm-chip btm-chip--dim">${T.simPeriodNote || ""}: ${days}d</span>`
-    : "";
-
   return `<section class="btm-card hud-panel hud-frame sim-report" id="simReportHead">
     <h2 class="btm-card__title seetel-title">${T.simReport}</h2>
     ${warn}
-    ${evalBanner}
     ${failBanner}
-    ${stage2Warn}
-    ${simFnStatusChipsHtml(T, res)}
-    <div class="sim-report__meta">
-      ${planChips}
-      ${periodDays}
-      <span class="btm-chip btm-chip--dim">${metaLine}</span>
-    </div>
-    ${simReportKpisHtml(T, res, {
-      beforeTotal,
-      afterBill: sizingAfter,
-      sizingSave,
-      savePct,
-      sizeLabel,
-      viable,
-      row: r,
-      days,
-    })}
-    ${extrasBody}
+    ${simBenefitReportSectionsHtml(T, res, simViewRow(res) || baseRow)}
   </section>`;
 }
 
@@ -6983,54 +6672,67 @@ function renderSimulateResult(T, res) {
     ? `<p class="btm-meta">${T.simSkipped}: ${res.skipped.join(", ")}</p>`
     : "";
 
-  const mapSection = `<section class="btm-card hud-panel hud-frame sim-report sim-report--detail">
-    <h3 class="btm-subhead">${T.simSavingsChart}</h3>
-    ${simMapLegendHtml(T)}
-    <div id="simSavingsChart" class="sim-savings-chart" role="img" aria-label="${T.simSavingsChart}"></div>
-  </section>`;
-
-  const gridSection = `<details class="btm-card hud-panel hud-frame sim-report sim-grid-fold">
-    <summary class="sim-grid-fold__summary">
-      <span>${T.simGridFold}</span>
-      <span class="btm-meta">${T.simGridFoldOpen} / ${T.simGridFoldClose}</span>
-    </summary>
-    <div class="sim-grid-fold__body">
-      ${simGridResultsHtml(res, T)}
-      ${skipped}
+  // 僅兩個以上配置才顯示地圖／配置切換；單一推薦不佔版面
+  const multi = (res.grid || []).length > 1;
+  const pick = multi ? simViewPanelHtml(res, T) : "";
+  const mapSection = multi
+    ? `<section class="btm-card hud-panel hud-frame" id="simMapCard">
+    <h2 class="btm-card__title seetel-title">${T.simSavingsChart}</h2>
+    <div class="sim-map-layout">
+      <div class="sim-map-layout__chart">
+        <div id="simSavingsChart" class="sim-savings-chart" role="img" aria-label="${T.simSavingsChart}"></div>
+      </div>
+      ${pick}
     </div>
-  </details>`;
+    <details class="sim-grid-fold">
+      <summary class="sim-grid-fold__summary" aria-label="${T.simGridFold}">
+        <span class="sim-grid-fold__chev" aria-hidden="true"></span>
+      </summary>
+      <div class="sim-grid-fold__body">
+        ${simGridResultsHtml(res, T)}
+        ${skipped}
+      </div>
+    </details>
+  </section>`
+    : "";
+
+  const sizeKpis = simReportSizeKpisBlock(T, res);
+
+  // 需第二層且未完成：地圖（若有）＋配置卡＋評估狀態
+  if (simStage2Pending(res)) {
+    return `${mapSection}
+  ${sizeKpis}
+  ${simReportHeadHtml(T, res)}`;
+  }
 
   const reportHead = simReportHeadHtml(T, res);
-  const compareKey = simCompareCacheKey(res, simViewBillRow(res) || r);
-  const compareSection = simBillCompareReportHtml(
-    T,
-    (simCompareBill && simCompareKey === compareKey) ? simCompareBill : null,
-    { loading: !!(simCompareFetch && simCompareKey === compareKey) },
-  );
-
+  // 地圖 → 配置結果卡 → 效益報告 → 排程 → 視覺化
   return `${mapSection}
-  ${gridSection}
-  ${simViewPanelHtml(res, T)}
+  ${sizeKpis}
   ${reportHead}
-  ${compareSection}`;
+  ${simViewRecCardHtml(res, T)}
+  ${simDispatchCardHtml(res, T)}`;
 }
 
 function renderSimulateParams(T, sim) {
+  const sug = suggestedBufferKw(sim, session.contractValues);
+  const demandKw = sim.demandBufferKw != null ? sim.demandBufferKw : sug;
+  const antiKw = sim.antiExportKw != null ? sim.antiExportKw : sug;
   return `<section class="btm-card hud-panel hud-frame">
-      <h2 class="btm-card__title seetel-title">${T.simParams}</h2>
       <div class="sim-params-block">
         <h3 class="btm-subhead">${T.batterySoc}</h3>
         <div class="btm-row">
+          ${simNumField("chargeEff", T.chargeEff, pctDisplay(sim.chargeEff), 0.1, 50, 100)}
           ${simNumField("socMax", T.socMax, pctDisplay(sim.socMax), 1, 0, 100)}
           ${simNumField("socMin", T.socMin, pctDisplay(sim.socMin), 1, 0, 100)}
-          ${simNumField("chargeEff", T.chargeEff, pctDisplay(sim.chargeEff), 0.1, 50, 100)}
         </div>
       </div>
       <div class="sim-params-block">
         <h3 class="btm-subhead">${T.gridReserve}</h3>
         <div class="btm-row">
-          ${simNumField("demandBufferKw", T.demandBufferKw, sim.demandBufferKw, 1, 0, undefined, T.demandBufferHint)}
-          ${simNumField("antiExportKw", T.antiExportKw, sim.antiExportKw, 1, 0, undefined, T.antiExportHint)}
+          ${simNumField("bufferPct", T.bufferPct, sim.bufferPct, 0.1, 0, 100)}
+          ${simNumField("demandBufferKw", T.demandBufferKw, demandKw, 10, 0)}
+          ${simNumField("antiExportKw", T.antiExportKw, antiKw, 10, 0)}
         </div>
       </div>
     </section>`;
@@ -7038,8 +6740,6 @@ function renderSimulateParams(T, sim) {
 
 function renderSimulatePanelPlanChange(T, sim) {
   const simTou = activeSimulateTou();
-  const importTou = importPlanTou();
-  const switched = simTou !== importTou;
   const touOpts = TOU_OPTIONS.map(
     (opt) => `<option value="${opt}"${simTou === opt ? " selected" : ""}>${opt}</option>`,
   ).join("");
@@ -7049,7 +6749,6 @@ function renderSimulatePanelPlanChange(T, sim) {
       <label class="ts-field"><span class="ts-field__label">${T.simScenarioPlan}</span>
         <select class="ts-select" id="simScenarioTou">${touOpts}</select></label>
     </div>
-    ${switched ? `<p class="btm-meta btm-meta--warn">${T.simPlanSwitchedNote}</p>` : ""}
     <h4 class="btm-subhead">${T.simScenarioContracts}</h4>
     <div class="btm-row" id="simScenarioContracts">${simScenarioContractFieldsHtml(T)}</div>`)}
   `);
@@ -7062,7 +6761,6 @@ function renderSimulateFunctions(T, sim) {
     </section>`;
   }
   return `<section class="btm-card hud-panel hud-frame" id="simDetails">
-      <h2 class="btm-card__title seetel-title">${T.functions}</h2>
       ${renderSimulateTabs(T, sim)}
       <div class="sim-tab-panels">
         ${renderSimulatePanelTou(T, sim)}
@@ -7072,8 +6770,7 @@ function renderSimulateFunctions(T, sim) {
         ${renderSimulatePanelBackup(T, sim)}
         ${renderSimulatePanelLargeUser(T, sim)}
       </div>
-    </section>
-    ${renderSimResultsBlock(T)}`;
+    </section>`;
 }
 
 function renderSimulate() {
@@ -7082,16 +6779,39 @@ function renderSimulate() {
   const T = I18N[locale].simulate;
   const sim = session.simulate;
   const hasImport = !!session.importId;
-  const hasSimResult = !!normalizeSimulateSizeResult(session.lastSimulateSize);
   if (hasImport) seedSimulateFromImport(false);
   const simTou = activeSimulateTou();
   sim.touSchedule = normalizeScheduleMatrix(sim.touSchedule, () => defaultTouSlots(simTou));
   sim.reserveSchedule = normalizeScheduleMatrix(sim.reserveSchedule, defaultReserveHourly);
 
+  if (!hasImport) {
+    return `<div class="btm-page btm-page--sim">
+      ${pageHeader("simulate.title")}
+      ${emptyImportHtml()}
+    </div>`;
+  }
+
+  const step = simWizardStep();
+  const stepCls = (id) => (step === id ? "" : " sim-step--off");
   return `<div class="btm-page btm-page--sim">
-    ${headerHtml("simulate.title", hasImport || hasSimResult ? metaChipsHtml() : "")}
-    ${renderSimulateParams(T, sim)}
-    ${hasImport ? renderSimulateFunctions(T, sim) : `${emptyImportHtml({ id: "simDetails" })}${renderSimReportSection(T)}`}
+    ${pageHeader("simulate.title")}
+    ${renderSimStepBar(T, step)}
+    <div class="sim-step${stepCls("fns")}" data-step="fns">
+      ${hasImport ? renderSimulateFunctions(T, sim) : emptyImportHtml()}
+      ${renderSimFnsNav(T)}
+    </div>
+    <div class="sim-step${stepCls("config")}" data-step="config">
+      <div id="simStepConfig">${hasImport ? renderSimStrategySection(T, sim) : ""}</div>
+      ${renderSimConfigNav(T)}
+    </div>
+    <div class="sim-step${stepCls("params")}" data-step="params">
+      ${renderSimulateParams(T, sim)}
+      ${renderSimParamsNav(T)}
+    </div>
+    <div class="sim-step${stepCls("result")}" data-step="result">
+      ${renderSimReportSection(T)}
+      ${renderSimRunBar(T)}
+    </div>
   </div>`;
 }
 
@@ -7106,18 +6826,7 @@ function renderSimulatePanelTou(T, sim) {
 function renderSimulatePanelDemand(T, sim) {
   return simFnPanel(sim.detailTab === "demand", "demand", `
     ${renderFnParamsCard(`
-    <label class="sim-fn-option">
-      <span class="sim-tab-check">
-        <input type="checkbox" data-sim-check="autoAdjustOffPeakContract"${
-          sim.autoAdjustOffPeakContract || sim.evaluateContractReduction ? " checked" : ""
-        }>
-        <span class="sim-tab-check__box"></span>
-      </span>
-      <span class="sim-fn-option__body">
-        <span class="sim-fn-option__title">${T.autoAdjustContract}</span>
-        <span class="btm-meta">${T.autoAdjustContractHint}</span>
-      </span>
-    </label>`)}
+    <p class="sim-fn-note btm-meta">${escapeHtml(T.simContractFnHint)}</p>`)}
   `);
 }
 
@@ -7145,7 +6854,7 @@ function renderSimulatePanelBackup(T, sim) {
   return simFnPanel(sim.detailTab === "backup", "backup", `
     ${renderFnParamsCard(`
     <div class="sim-fn-fields">
-      ${simNumField("backupReserveKwh", T.backupReserveKwh, sim.backupReserveKwh, 1, 0, undefined, T.backupReserveHint)}
+      ${simNumField("backupReserveKwh", T.backupReserveKwh, sim.backupReserveKwh, 1, 0)}
     </div>`)}
   `);
 }
@@ -7190,11 +6899,8 @@ function fetchSimulateSample({ replace = false } = {}) {
   if (simulateFetch) return Promise.resolve(null);
   if (simulateSampleFetch && !replace) return simulateSampleFetch;
 
-  const fd = new FormData();
-  fd.append("import_id", session.importId);
-  if (!appendSimulateContractFields(fd)) return Promise.resolve(null);
-  fd.append("simulate", JSON.stringify(session.simulate || {}));
-  appendOverrides(fd);
+  const fd = buildSimulateFormData();
+  if (!fd) return Promise.resolve(null);
   const job = ++simulateSampleJob;
   const importId = session.importId;
 
@@ -7207,25 +6913,92 @@ function fetchSimulateSample({ replace = false } = {}) {
       if (sample && sample.diagnosis) {
         sizingDiagnosis = sample.diagnosis;
       }
+      simSampleStamp = simConditionStamp();
       persistSession();
-      if (parseRoute() === ROUTES.SIMULATE) {
-        renderPage({ animate: false, preserveScroll: true });
-      }
+      paintSimSample();
       return sample;
     })
     .catch((err) => {
       if (job === simulateSampleJob) simulateSampleFetch = null;
       if (isImportExpiredError(err)) redirectImportExpired();
-      else if (parseRoute() === ROUTES.SIMULATE) {
-        renderPage({ animate: false, preserveScroll: true });
-      }
+      else paintSimSample();
       return null;
     });
 
-  if (parseRoute() === ROUTES.SIMULATE) {
-    renderPage({ animate: false, preserveScroll: true });
-  }
+  paintSimSample();
   return simulateSampleFetch;
+}
+
+function ensureSimSample() {
+  if (!session.importId || session.simulate.sizingMode === "single") return;
+  readSimulateForm();
+  const stamp = simConditionStamp();
+  if (stamp === simSampleStamp && session.lastSimulateSample) return;
+  fetchSimulateSample({ replace: true });
+}
+
+function showSimStep(id) {
+  readSimulateForm();
+  const allowed = ["params", "fns", "config", "result"];
+  if (!allowed.includes(id)) return;
+  if ((id === "config" || id === "params" || id === "result") && !session.importId) return;
+  if (simResultLocksSteps() && id !== "result") return;
+  if (
+    id === "result"
+    && !normalizeSimulateSizeResult(session.lastSimulateSize)
+    && !simulateFetch
+    && !simulateFullFetch
+  ) return;
+  session.simulate.wizardStep = id;
+  persistSession();
+  const page = document.querySelector(".btm-page--sim");
+  if (!page) {
+    renderPage({ animate: false, preserveScroll: true });
+    if (id === "config") ensureSimSample();
+    return;
+  }
+  page.querySelectorAll(".sim-step").forEach((el) => {
+    el.classList.toggle("sim-step--off", el.dataset.step !== id);
+  });
+  page.querySelectorAll(".sim-steps__item").forEach((el) => {
+    const btn = el.querySelector("[data-sim-step]");
+    el.classList.toggle("sim-steps__item--on", !!(btn && btn.dataset.simStep === id));
+  });
+  if (id === "config") ensureSimSample();
+}
+
+function bindSimStrategyControls() {
+  document.querySelectorAll('[name="sizingMode"]').forEach((el) => {
+    el.addEventListener("change", () => {
+      readSimulateForm();
+      persistSession();
+      if (session.simulate.sizingMode === "single") {
+        simulateSampleJob += 1;
+        simulateSampleFetch = null;
+        refreshSimConfigStep();
+        return;
+      }
+      markSimSampleStale();
+      fetchSimulateSample({ replace: true });
+    });
+  });
+
+  document.querySelectorAll('[name="includeHalfPeak"]').forEach((el) => {
+    el.addEventListener("change", () => {
+      readSimulateForm();
+      persistSession();
+      refreshSimConfigStep();
+    });
+  });
+
+  document.querySelectorAll('[name="sizingStrategies"], [name="sizingEnergySeeds"]').forEach((el) => {
+    el.addEventListener("change", () => {
+      readSimulateForm();
+      persistSession();
+      markSimSampleStale();
+      fetchSimulateSample({ replace: true });
+    });
+  });
 }
 
 function bindSimulate() {
@@ -7241,20 +7014,15 @@ function bindSimulate() {
     simWorkspaceBooting = true;
     ensureSettingsLoaded().then(() => {
       const importId = session.importId;
-      // 只打 sample（內含 diagnosis）
-      fetchSimulateSample({ replace: true })
-        .then((sample) => {
-          if (session.importId !== importId) return;
-          if (sample && sample.diagnosis) sizingDiagnosis = sample.diagnosis;
-        })
-        .finally(() => {
-          simWorkspaceBooting = false;
-          if (session.importId !== importId) return;
-          simWorkspaceReady = true;
-          if (parseRoute() === ROUTES.SIMULATE) {
-            renderPage({ animate: false, preserveScroll: true });
-          }
-        });
+      const finishBoot = () => {
+        simWorkspaceBooting = false;
+        if (session.importId !== importId) return;
+        simWorkspaceReady = true;
+        if (parseRoute() !== ROUTES.SIMULATE) return;
+        renderPage({ animate: false, preserveScroll: true });
+        if (simWizardStep() === "config") ensureSimSample();
+      };
+      finishBoot();
     });
   }
 
@@ -7262,44 +7030,34 @@ function bindSimulate() {
   if (simTouEl) {
     simTouEl.onchange = () => {
       applySimulateTouChange(simTouEl.value);
+      markSimSampleStale();
       renderPage({ animate: false, preserveScroll: true });
-      fetchSimulateSample({ replace: true });
     };
   }
   document.querySelectorAll("#simScenarioContracts input").forEach((el) => {
     el.addEventListener("change", () => {
       readScenarioContractInputs();
+      markSimSampleStale();
       persistSession();
     });
   });
 
-  document.querySelectorAll('[name="includeHalfPeak"]').forEach((el) => {
-    el.addEventListener("change", () => {
-      readSimulateForm();
-      persistSession();
-      // 樣本已含開／關兩組；切換只重繪，不重打 sample
-      renderPage({ animate: false, preserveScroll: true });
-    });
-  });
-
-  document.querySelectorAll('[name="sizingStrategies"], [name="sizingEnergySeeds"]').forEach((el) => {
-    el.addEventListener("change", () => {
-      readSimulateForm();
-      persistSession();
-      renderPage({ animate: false, preserveScroll: true });
-    });
+  bindSimStrategyControls();
+  document.getElementById("simStepConfig")?.addEventListener("input", (ev) => {
+    if (!ev.target.closest("[data-sim]")) return;
+    readSimulateForm();
   });
 
   document.querySelectorAll('[name="bessFn"]').forEach((el) => {
     el.addEventListener("change", () => {
       readSimulateForm();
       if (el.value === "demand") {
-        // readSimulateForm 若畫面仍有內層勾選會再把 demand 加回；改以外層為準
         const on = el.checked;
         const rest = (session.simulate.functions || []).filter((f) => f !== "tou" && f !== "demand");
         session.simulate.functions = on ? ["tou", ...rest, "demand"] : ["tou", ...rest];
-        syncDemandAutoContract(session.simulate, "demand");
+        syncContractFunction(session.simulate, "demand");
         if (on) session.simulate.detailTab = "demand";
+        markSimSampleStale();
         persistSession();
         renderPage({ animate: false, preserveScroll: true });
         return;
@@ -7334,10 +7092,7 @@ function bindSimulate() {
         }
       }
       if (el.name === "touScheduleMode" && el.value === "manual" && prevTou !== "manual") {
-        const rec = simTouMetaFromResult()?.recommended_schedule;
-        if (rec) {
-          session.simulate.touSchedule = normalizeScheduleMatrix(rec, () => defaultTouSlots(activeSimulateTou()));
-        }
+        session.simulate.touSchedule = seedManualTouFromRecommended();
       }
       renderPage({ animate: false, preserveScroll: true });
     });
@@ -7347,35 +7102,9 @@ function bindSimulate() {
       const kind = el.dataset.schedOpen;
       if (kind !== "tou" && kind !== "reserve") return;
       readSimulateForm();
+      if (kind === "tou") maybeSeedManualTouOnce();
       simScheduleModal = kind;
       syncScheduleModalHost();
-    });
-  });
-  document.querySelectorAll("[data-sched-open-rec]").forEach((el) => {
-    el.addEventListener("click", () => {
-      const kind = el.dataset.schedOpenRec || "reserve";
-      simScheduleModal = kind === "tou" ? "tou-rec" : "reserve-rec";
-      syncScheduleModalHost();
-    });
-  });
-  document.querySelectorAll("[data-apply-rec-manual]").forEach((el) => {
-    el.addEventListener("click", () => {
-      const kind = el.dataset.applyRecManual;
-      if (kind === "reserve") {
-        const rec = simReserveMetaFromResult()?.recommended_schedule;
-        if (!rec) return;
-        session.simulate.reserveScheduleMode = "manual";
-        session.simulate.reserveSchedule = normalizeScheduleMatrix(rec, defaultReserveHourly);
-        session.simulate.detailTab = "reserve";
-      } else if (kind === "tou") {
-        const rec = simTouMetaFromResult()?.recommended_schedule;
-        if (!rec) return;
-        session.simulate.touScheduleMode = "manual";
-        session.simulate.touSchedule = normalizeScheduleMatrix(rec, () => defaultTouSlots(activeSimulateTou()));
-        session.simulate.detailTab = "tou";
-      } else return;
-      persistSession();
-      renderPage({ animate: false, preserveScroll: true });
     });
   });
   if (!simScheduleEscBound) {
@@ -7395,13 +7124,26 @@ function bindSimulate() {
     if (el.dataset.sim === "largeUserRatio") return;
     el.addEventListener("change", () => {
       readSimulateForm();
-      if (el.dataset.simCheck === "autoAdjustOffPeakContract") {
-        syncDemandAutoContract(session.simulate, "auto");
-        if (session.simulate.autoAdjustOffPeakContract) {
-          session.simulate.detailTab = "demand";
-        }
+      const key = el.dataset.sim;
+      if (key === "bufferPct") {
+        const sug = suggestedBufferKw(session.simulate, session.contractValues);
+        session.simulate.demandBufferKw = sug;
+        session.simulate.antiExportKw = sug;
+        markSimSampleStale();
         persistSession();
         renderPage({ animate: false, preserveScroll: true });
+        return;
+      }
+      if (key === "demandBufferKw" || key === "antiExportKw") {
+        const n = Number(session.simulate[key]);
+        if (Number.isFinite(n)) session.simulate[key] = ceilToStep(Math.max(0, n));
+        markSimSampleStale();
+        persistSession();
+        renderPage({ animate: false, preserveScroll: true });
+        return;
+      }
+      if (key === "socMin" || key === "socMax" || key === "chargeEff") {
+        markSimSampleStale();
       }
     });
     if (el.dataset.sched) {
@@ -7412,60 +7154,73 @@ function bindSimulate() {
   });
   syncSimulateTabs();
 
+  document.getElementById("btnSimNextFns")?.addEventListener("click", () => showSimStep("config"));
+  document.getElementById("btnSimBack")?.addEventListener("click", () => showSimStep("fns"));
+  document.getElementById("btnSimNextConfig")?.addEventListener("click", () => showSimStep("params"));
+  document.getElementById("btnSimBackParams")?.addEventListener("click", () => showSimStep("config"));
+  document.querySelectorAll("[data-sim-step]").forEach((el) => {
+    el.addEventListener("click", () => {
+      if (el.disabled) return;
+      showSimStep(el.dataset.simStep);
+    });
+  });
+
   async function startSimulateRun() {
     if (simulateFetch || simulateFullFetch || simulateExportFetch) return;
+    // 有報告時不可直接重跑；須先清除結果
+    if (normalizeSimulateSizeResult(session.lastSimulateSize)) return;
     // 取消進行中的預覽取樣
     simulateSampleJob += 1;
     simulateSampleFetch = null;
     readSimulateForm();
-    const meta = document.getElementById("simMeta");
+    const meta = simVisibleMeta();
     if (!requireLiveImportOrRedirect()) return;
     await ensureSettingsLoaded();
     if (!buildScenarioContracts()) {
       setRunMeta(meta, t("import.needSchema"), true);
       return;
     }
-    if (
+    const singleRun = session.simulate.sizingMode === "single";
+    if (singleRun) {
+      const pcs = Number(session.simulate.manualPcsKw);
+      const batt = Number(session.simulate.manualBattKwh);
+      if (!(pcs > 0) || !(batt > 0)) {
+        setRunMeta(meta, t("simulate.simNeedManual"), true);
+        return;
+      }
+    } else if (
       !normalizeSizingStrategies(session.simulate.sizingStrategies).length
       || !normalizeEnergySeeds(session.simulate.sizingEnergySeeds).length
     ) {
       setRunMeta(meta, t("simulate.simNeedStrategy"), true);
       return;
     }
-    const fdSize = new FormData();
-    fdSize.append("import_id", session.importId);
-    if (!appendSimulateContractFields(fdSize)) {
+    // 凍結本輪 simulate：size→full／view 共用同一份（略過 UI 欄）
+    simFrozenPayload = simulateApiJson();
+    const fdSize = buildSimulateFormData({ simulateJson: simFrozenPayload });
+    if (!fdSize) {
       setRunMeta(meta, t("import.needSchema"), true);
       return;
     }
-    fdSize.append("simulate", JSON.stringify(session.simulate));
-    appendOverrides(fdSize);
     const id = ++simulateJob;
-    const prev = normalizeSimulateSizeResult(session.lastSimulateSize);
-    if (prev) {
-      simPinnedRun = simSnapshotFromResult(prev);
-      simDismissedSnapshot = null;
-    }
+    simulateFullPrefetchToken += 1;
     session.simulateError = null;
     session._simFullError = null;
     session._scrollSimReport = false;
-    clearSimCompareBill();
+    clearSimAuxCaches();
     // 工作區已有完整 sample 則直接 /size（後端有 profile／size 快取）
     const existing = session.lastSimulateSample;
     const hasRichSample = !!(existing && existing.profile_stats && existing.diagnosis);
-    if (!hasRichSample) {
-      const fdSample = new FormData();
-      fdSample.append("import_id", session.importId);
-      if (!appendSimulateContractFields(fdSample)) {
+    if (!singleRun && !hasRichSample) {
+      const fdSample = buildSimulateFormData({ simulateJson: simFrozenPayload });
+      if (!fdSample) {
         setRunMeta(meta, t("import.needSchema"), true);
         return;
       }
-      fdSample.append("simulate", JSON.stringify(session.simulate));
-      appendOverrides(fdSample);
       const sampleJob = ++simulateSampleJob;
       session.lastSimulateSample = null;
       simulateSampleFetch = apiJson("/api/simulate/sample", { method: "POST", body: fdSample });
-      renderPage({ animate: false, preserveScroll: !!prev });
+      renderPage({ animate: false, preserveScroll: false });
       try {
         const sample = await simulateSampleFetch;
         if (id !== simulateJob || sampleJob !== simulateSampleJob) return;
@@ -7483,11 +7238,12 @@ function bindSimulate() {
         }
         simulateSampleFetch = null;
         if (parseRoute() === ROUTES.SIMULATE) {
-          renderPage({ animate: false, preserveScroll: !!prev });
+          renderPage({ animate: false, preserveScroll: false });
         }
         return;
       }
-    } else if (existing.diagnosis) {
+    } else if (existing && existing.diagnosis) {
+      // 指定沒有交叉樣本，existing 是 null
       sizingDiagnosis = existing.diagnosis;
     }
 
@@ -7498,6 +7254,11 @@ function bindSimulate() {
       simDispatchChartCache = {};
       simDispatchChartLoadId += 1;
       session.lastSimulateSize = normalizeSimulateSizeResult(res);
+      if (session.lastSimulateSize && simFrozenPayload) {
+        session.lastSimulateSize._simulatePayload = simFrozenPayload;
+      }
+      maybeSeedManualTouOnce();
+      session.simulate.wizardStep = "result";
       if (res && res.diagnosis) sizingDiagnosis = res.diagnosis;
       if (res) {
         const prevSample = session.lastSimulateSample;
@@ -7510,15 +7271,15 @@ function bindSimulate() {
             ? prevSample.profile_stats
             : (res.profile_stats || prevSample?.profile_stats || null),
           grid_points: res.grid_points ?? prevSample?.grid_points,
-          contract_adjustment: res.contract_adjustment ?? prevSample?.contract_adjustment,
           sample_source: res.sample_source ?? prevSample?.sample_source,
           diagnosis: res.diagnosis ?? prevSample?.diagnosis,
+          strategies: res.strategies ?? prevSample?.strategies,
+          energy_keys: prevSample?.energy_keys,
+          combinations: prevSample?.combinations || null,
         };
       }
       session.simulateResultKey = simulateRunKey();
       session.simulateError = null;
-      simPinnedRun = null;
-      simDismissedSnapshot = null;
       session._scrollSimReport = true;
       persistSession();
     }
@@ -7526,26 +7287,20 @@ function bindSimulate() {
     async function runFullStep(sizeRes) {
       if (!(sizeRes && sizeRes.need_full && sizeRes.stage1_key)) return;
       const rec = sizeRes.recommended || sizeRes.best_effort;
-      const fdFull = new FormData();
-      fdFull.append("import_id", session.importId);
-      if (!appendSimulateContractFields(fdFull)) return;
-      fdFull.append("simulate", JSON.stringify(session.simulate));
-      fdFull.append("stage1_key", String(sizeRes.stage1_key));
-      if (rec) {
-        fdFull.append("pcs_kw", String(rec.pcs_kw));
-        fdFull.append("batt_kwh", String(rec.batt_kwh));
-      }
-      appendOverrides(fdFull);
-      simulateFullFetch = apiJson("/api/simulate/full", { method: "POST", body: fdFull });
+      if (!rec) return;
       if (parseRoute() === ROUTES.SIMULATE) {
         renderPage({ animate: false, preserveScroll: true });
       }
       try {
-        const full = await simulateFullFetch;
+        const merged = await fetchSimulateFullForRow(sizeRes, rec, I18N[locale].simulate);
         if (id !== simulateJob) return;
         session._simFullError = null;
-        const merged = simMergeFullResult(sizeRes, full);
-        await applySizeResult(merged || full);
+        if (simFrozenPayload && merged) merged._simulatePayload = simFrozenPayload;
+        await applySizeResult(merged || sizeRes);
+        const live = normalizeSimulateSizeResult(session.lastSimulateSize) || merged;
+        prefetchStage2Siblings(live, I18N[locale].simulate, id).catch((err) => {
+          console.warn("sim stage2 sibling prefetch", err);
+        });
       } catch (err) {
         if (id !== simulateJob) return;
         session._simFullError = String(err.message || err);
@@ -7554,14 +7309,13 @@ function bindSimulate() {
           return;
         }
         persistSession();
-      } finally {
-        if (id === simulateJob) simulateFullFetch = null;
       }
     }
 
     try {
+      session.simulate.wizardStep = "result";
       simulateFetch = apiJson("/api/simulate/size", { method: "POST", body: fdSize });
-      renderPage({ animate: false, preserveScroll: !!prev });
+      renderPage({ animate: false, preserveScroll: false });
 
       const res = await simulateFetch;
       if (id !== simulateJob) return;
@@ -7574,6 +7328,7 @@ function bindSimulate() {
     } catch (err) {
       if (id !== simulateJob) return;
       session.simulateError = String(err.message || err);
+      if (!normalizeSimulateSizeResult(session.lastSimulateSize)) session.simulate.wizardStep = "params";
       persistSession();
       if (isImportExpiredError(err)) {
         redirectImportExpired();
@@ -7601,11 +7356,13 @@ function bindSimulate() {
   if (clearBtn) {
     clearBtn.onclick = () => {
       if (simulateFetch || simulateFullFetch || simulateSampleFetch || simulateExportFetch) return;
-      const prev = normalizeSimulateSizeResult(session.lastSimulateSize);
-      if (prev) simDismissedSnapshot = simSnapshotFromResult(prev);
-      simPinnedRun = null;
+      session.simulate.wizardStep = "params";
+      markSimSampleStale();
       clearSimulateResult();
       renderPage({ animate: false, preserveScroll: true });
+      if (session.importId && session.simulate.sizingMode !== "single") {
+        fetchSimulateSample({ replace: true });
+      }
     };
   }
 
@@ -7618,9 +7375,7 @@ function bindSimulate() {
       if (!row || !requireLiveImportOrRedirect()) return;
       readSimulateForm();
       await ensureSettingsLoaded();
-      const meta = document.getElementById("simMeta");
-      const fd = new FormData();
-      fd.append("import_id", session.importId);
+      const meta = simVisibleMeta();
       const s2Exp = simActiveStage2(res);
       const finalRow = (s2Exp && s2Exp.final)
         || (res.stage2 && res.stage2.final)
@@ -7628,18 +7383,15 @@ function bindSimulate() {
         || null;
       const adopted = finalRow && finalRow.stage2_contracts;
       // contracts＝情境／量體；scheme＝stage2 採用契約（若有）
-      if (!appendSimulateContractFields(fd)) {
+      const fd = buildSimulateFormData({
+        pcsKw: row.pcs_kw,
+        battKwh: row.batt_kwh,
+        schemeContracts: adopted || undefined,
+      });
+      if (!fd) {
         setRunMeta(meta, t("import.needSchema"), true);
         return;
       }
-      if (adopted) {
-        fd.append("scheme_contracts", JSON.stringify(adopted));
-      }
-      const exportSim = { ...session.simulate };
-      fd.append("simulate", JSON.stringify(exportSim));
-      fd.append("pcs_kw", String(row.pcs_kw));
-      fd.append("batt_kwh", String(row.batt_kwh));
-      appendOverrides(fd);
       const T = I18N[locale].simulate;
       simulateExportFetch = true;
       exportBtn.disabled = true;
@@ -7678,25 +7430,27 @@ function bindSimulate() {
     };
   }
 
-  document.getElementById("btnSimDismissSnapshot")?.addEventListener("click", () => {
-    simDismissedSnapshot = null;
-    renderPage({ animate: false, preserveScroll: true });
-  });
-
   const simRes = normalizeSimulateSizeResult(session.lastSimulateSize);
   if (simRes) {
     requestAnimationFrame(() => {
       const T = I18N[locale].simulate;
       renderSimSavingsChart(simRes, T);
+      if (simStage2Pending(simRes)) {
+        if (session._scrollSimReport) {
+          session._scrollSimReport = false;
+          (document.getElementById("simMapCard") || document.getElementById("simReportHead"))
+            ?.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
+        return;
+      }
       seedSimDispatchCache(simRes);
       bindSimDispatchCharts(simRes, T);
       ensureSimDispatchCharts(simRes, T).then(() => {
         prefetchSimViewCharts(simRes, T).catch((err) => {
           console.warn("sim dispatch prefetch", err);
         });
-      });
-      ensureSimCompareBill(simRes, T).catch((err) => {
-        console.warn("sim compare bill", err);
+        // 實際功率矩陣就緒後，重掛排程卡（直接呈現）
+        mountSimFollowCards(simRes, T);
       });
       if (session._scrollSimReport) {
         session._scrollSimReport = false;
@@ -7720,7 +7474,21 @@ function bindCurrentPage(route) {
   if (route === ROUTES.SETTINGS) bindSettings();
   else if (route === ROUTES.IMPORT) bindImport();
   else if (route === ROUTES.CHARTS) bindCharts();
+  else if (route === ROUTES.DASHBOARD) bindPageTabs(() => dashTab, (id) => { dashTab = id; });
   else if (route === ROUTES.SIMULATE) bindSimulate();
+}
+
+const importFileHold = document.createElement("div");
+
+function parkImportFile() {
+  const upload = document.getElementById("upload");
+  if (upload) importFileHold.appendChild(upload);
+}
+
+function mountImportFile() {
+  const held = importFileHold.querySelector("#upload");
+  const upload = document.getElementById("upload");
+  if (held && upload && held !== upload) upload.replaceWith(held);
 }
 
 function renderPage(options = {}) {
@@ -7747,11 +7515,13 @@ function renderPage(options = {}) {
 
   const commit = () => {
     if (gen !== renderGeneration) return;
+    parkImportFile();
     currentRoute = nextRoute;
     root.classList.remove("page-fade", "page-fade-out");
     root.style.opacity = "";
     setActiveNav(currentRoute);
     root.innerHTML = buildPageHtml(currentRoute);
+    if (nextRoute === ROUTES.IMPORT) mountImportFile();
     bindCurrentPage(currentRoute);
     persistSession();
     if (preserveScroll) main.scrollTop = scrollTop;
@@ -7800,6 +7570,7 @@ async function boot() {
     session.samples = [];
   }
   await probeImport();
+  dropUnusableSelection();
   window.addEventListener("popstate", () => renderPage({ animate: true }));
   const route = parseRoute();
   syncUrl(route, true);

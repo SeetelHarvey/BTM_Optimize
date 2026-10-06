@@ -4,6 +4,7 @@ from dataclasses import asdict, dataclass
 from typing import Any
 
 from app.services import settings as settings_svc
+from app.services.quantize import ceil_to_step
 
 CONTRACT_PROFILES: dict[str, dict[str, Any]] = {
     "ThreeStage": {
@@ -139,59 +140,43 @@ def _rate(demand_rates: dict, key: str, bill_season: str) -> float:
     return float(demand_rates[key][bill_season])
 
 
-def free_off_peak_kw(contracts: ContractCapacity, tou_type: str) -> float:
-    """不增加基本電費可增離峰契約 kW。"""
+def allowance_kw(contracts: ContractCapacity, tou_type: str) -> float:
+    """容許額度 kW：(經常+次段)×50% − (週六半尖+離峰)；額度內不計該段基本費。"""
     c = validate(contracts, tou_type)
     allowance = (c.regular_kw + tier2_kw(c)) * 0.5
     used = c.saturday_half_peak_kw + c.off_peak_kw
     return max(0.0, round(allowance - used, 3))
 
 
-def with_off_peak_boost(
-    contracts: ContractCapacity,
-    add_kw: float,
-    tou_type: str,
-) -> ContractCapacity:
-    """離峰契約加 kW（試算用，不改 session）。"""
-    c = validate(contracts, tou_type)
-    data = c.to_dict()
-    data["off_peak_kw"] = round(float(data["off_peak_kw"]) + float(add_kw), 3)
-    return validate(ContractCapacity.from_dict(data), tou_type)
-
-
-def _grid_residual_stats(disp: Any, periods: frozenset[str]) -> dict[str, float]:
-    """調度後指定時段 grid 殘差：月 max／p95／尖峰日日均。"""
+def _period_max_kw(
+    disp: Any,
+    periods: frozenset[str],
+    *,
+    season: str | None = None,
+) -> float:
+    """調度後指定時段 grid 最大（有日期時：各月 max 再取最大）。"""
     import pandas as pd
 
-    empty = {"max_kw": 0.0, "p95_kw": 0.0, "day_avg_kw": 0.0}
     if disp is None or getattr(disp, "empty", True) or "grid_kw" not in disp.columns:
-        return empty
+        return 0.0
     work = disp
     if "period" in work.columns:
         part = work.loc[work["period"].astype(str).isin(periods)]
         if part.empty:
-            return empty
+            return 0.0
     else:
         part = work
+    if season is not None and "season" in part.columns:
+        part = part.loc[part["season"].astype(str) == season]
+        if part.empty:
+            return 0.0
     kw = part["grid_kw"].astype(float)
     if kw.empty:
-        return empty
-    residual_max = float(kw.max())
-    residual_p95 = float(kw.quantile(0.95)) if len(kw) else residual_max
-    day_avg = 0.0
+        return 0.0
     if "date" in part.columns:
-        dates = pd.to_datetime(part["date"]).dt.normalize()
-        daily_max = kw.groupby(dates).max()
-        if len(daily_max):
-            top_day = daily_max.idxmax()
-            day_avg = float(kw.loc[dates == top_day].mean())
         months = pd.to_datetime(part["date"]).dt.strftime("%Y-%m")
-        residual_max = float(kw.groupby(months).max().max())
-    return {
-        "max_kw": round(residual_max, 1),
-        "p95_kw": round(residual_p95, 1),
-        "day_avg_kw": round(day_avg, 1),
-    }
+        return round(float(kw.groupby(months).max().max()), 1)
+    return round(float(kw.max()), 1)
 
 
 def suggest_regular_kw_from_dispatch(
@@ -201,134 +186,146 @@ def suggest_regular_kw_from_dispatch(
     buffer_kw: float = 0.0,
     target_periods: frozenset[str] | None = None,
 ) -> dict[str, float]:
-    """由調度後尖峰 grid 殘差建議經常；並附半尖峰／週六半尖殘差供階層候選。"""
+    """整理契約重配所需的各時段調度後最大值。"""
     current = max(0.0, float(current_regular_kw))
     buf = max(0.0, float(buffer_kw))
-    # 經常只看尖峰；半尖峰另以 half_peak_* 欄位補契約（勿把半尖併進經常）
     peak_periods = frozenset({"peak"})
     if target_periods is not None and "peak" not in target_periods:
         peak_periods = frozenset(target_periods)
-    peak = _grid_residual_stats(disp, peak_periods)
-    hp = _grid_residual_stats(disp, frozenset({"half_peak"}))
-    sat = _grid_residual_stats(disp, frozenset({"saturday_half_peak"}))
-    residual_max = float(peak["max_kw"])
-    residual_p95 = float(peak["p95_kw"])
-    day_avg = float(peak["day_avg_kw"])
-    suggested = min(current, max(0.0, round(residual_max + buf, 1)))
+    peak_max = _period_max_kw(disp, peak_periods)
+    hp_max = _period_max_kw(disp, frozenset({"half_peak"}))
+    non_summer_max = _period_max_kw(
+        disp, frozenset({"peak"}), season="non_summer"
+    )
+    sat_max = _period_max_kw(disp, frozenset({"saturday_half_peak"}))
+    off_max = _period_max_kw(disp, frozenset({"off_peak"}))
+    floor_kw = max(10.0, ceil_to_step(peak_max + buf))
     return {
         "current_regular_kw": round(current, 1),
-        "peak_grid_max_kw": residual_max,
-        "peak_day_avg_kw": day_avg,
-        "peak_grid_p95_kw": residual_p95,
-        "half_peak_grid_max_kw": float(hp["max_kw"]),
-        "half_peak_day_avg_kw": float(hp["day_avg_kw"]),
-        "half_peak_grid_p95_kw": float(hp["p95_kw"]),
-        "saturday_half_peak_grid_max_kw": float(sat["max_kw"]),
-        "saturday_half_peak_day_avg_kw": float(sat["day_avg_kw"]),
-        "saturday_half_peak_grid_p95_kw": float(sat["p95_kw"]),
-        "suggested_regular_kw": suggested,
-        "reducible_kw": round(max(0.0, current - suggested), 1),
+        "peak_grid_max_kw": peak_max,
+        "half_peak_grid_max_kw": hp_max,
+        "non_summer_grid_max_kw": non_summer_max,
+        "saturday_half_peak_grid_max_kw": sat_max,
+        "off_peak_grid_max_kw": off_max,
+        "floor_regular_kw": round(floor_kw, 1),
+        "suggested_regular_kw": round(floor_kw, 1),
+        "reducible_kw": round(max(0.0, current - floor_kw), 1),
         "buffer_kw": round(buf, 1),
     }
 
 
-def _residual_metric(residual: dict[str, float], prefix: str, label: str) -> float:
-    """階層標籤 → 殘差指標。"""
-    if label == "peak_day_avg":
-        return float(residual.get(f"{prefix}_day_avg_kw") or 0)
-    if label == "p95":
-        return float(residual.get(f"{prefix}_grid_p95_kw") or 0)
-    if label == "max":
-        return float(residual.get(f"{prefix}_grid_max_kw") or 0)
-    return 0.0
-
-
-def hierarchical_contract_candidates(
+def rule_based_contract_proposal(
     base_contracts: dict[str, Any] | ContractCapacity,
     tou_type: str,
     *,
     residual: dict[str, float],
     buffer_kw: float = 0.0,
-    apply_free_boost: bool = True,
-) -> list[dict[str, Any]]:
-    """階層契約候選：降經常 → 半尖峰／週六半尖補齊 → 剩餘轉離峰 → 免費增額。"""
+) -> dict[str, Any]:
+    """依四層累計規則產生唯一契約提案。"""
     base = validate(
         base_contracts
         if isinstance(base_contracts, ContractCapacity)
         else ContractCapacity.from_dict(base_contracts),
         tou_type,
     )
-    fields = set(schema(tou_type)["fields"])
-    current = float(base.regular_kw)
+    profile = schema(tou_type)
+    tier2_field = str(profile["tier2_field"])
     buf = max(0.0, float(buffer_kw))
-    raw_vals = [
-        current,
-        float(residual.get("peak_day_avg_kw") or 0) + buf,
-        float(residual.get("peak_grid_p95_kw") or 0) + buf,
-        float(residual.get("peak_grid_max_kw") or 0) + buf,
-    ]
-    labels = ["current", "peak_day_avg", "p95", "max"]
-    seen: set[tuple[float, float, float]] = set()
-    out: list[dict[str, Any]] = []
-    for label, raw in zip(labels, raw_vals):
-        if raw <= 0 and label != "current":
-            continue
-        r_new = round(min(current, max(0.0, raw)), 1)
-        if label == "current":
-            hp_new = float(base.half_peak_kw)
-            sat_new = float(base.saturday_half_peak_kw)
-        else:
-            hp_need = _residual_metric(residual, "half_peak", label) + buf
-            sat_need = _residual_metric(residual, "saturday_half_peak", label) + buf
-            if "half_peak_kw" in fields:
-                hp_new = max(0.0, round(hp_need - r_new, 1))
-            else:
-                hp_new = 0.0
-            # 週六半尖上限 = 經常 + tier2 + saturday；tier2 先用 hp_new／non_summer
-            t2 = hp_new if "half_peak_kw" in fields else float(base.non_summer_kw)
-            if "saturday_half_peak_kw" in fields:
-                sat_new = max(0.0, round(sat_need - r_new - t2, 1))
-            else:
-                sat_new = 0.0
+    original_total = round(
+        float(base.regular_kw)
+        + tier2_kw(base)
+        + float(base.saturday_half_peak_kw)
+        + float(base.off_peak_kw),
+        3,
+    )
+    peak_max = float(residual.get("peak_grid_max_kw") or 0)
+    tier2_max_key = (
+        "half_peak_grid_max_kw"
+        if tier2_field == "half_peak_kw"
+        else "non_summer_grid_max_kw"
+    )
+    tier2_max = float(residual.get(tier2_max_key) or 0)
+    sat_max = float(residual.get("saturday_half_peak_grid_max_kw") or 0)
 
-        key = (r_new, round(hp_new, 1), round(sat_new, 1))
-        if key in seen:
-            continue
-        seen.add(key)
+    regular = max(10.0, ceil_to_step(peak_max + buf))
+    tier2_demand = ceil_to_step(tier2_max)
+    tier2_ceiling = max(regular, min(tier2_demand, original_total))
+    tier2 = max(0.0, tier2_ceiling - regular)
+    free_total = round(tier2_ceiling * 0.5, 3)
+    saturday_demand = ceil_to_step(sat_max)
+    saturday_ceiling = max(
+        tier2_ceiling,
+        saturday_demand,
+        tier2_ceiling + free_total,
+    )
+    saturday = max(0.0, saturday_ceiling - tier2_ceiling)
+    off_peak_demand = ceil_to_step(
+        float(residual.get("off_peak_grid_max_kw") or 0)
+    )
+    off_peak_ceiling = max(saturday_ceiling, off_peak_demand)
+    off_peak = max(0.0, off_peak_ceiling - saturday_ceiling)
 
-        delta_reg = max(0.0, current - r_new)
-        hp_raise = max(0.0, hp_new - float(base.half_peak_kw))
-        sat_raise = max(0.0, sat_new - float(base.saturday_half_peak_kw))
-        # 經常降幅優先補半尖／週六半尖，剩餘才轉離峰
-        off_add = max(0.0, delta_reg - hp_raise - sat_raise)
-
-        data = base.to_dict()
-        data["regular_kw"] = r_new
-        if "half_peak_kw" in fields:
-            data["half_peak_kw"] = round(hp_new, 3)
-        if "saturday_half_peak_kw" in fields:
-            data["saturday_half_peak_kw"] = round(sat_new, 3)
-        data["off_peak_kw"] = round(float(base.off_peak_kw) + off_add, 3)
-        replaced = validate(ContractCapacity.from_dict(data), tou_type)
-        free_kw = free_off_peak_kw(replaced, tou_type) if apply_free_boost else 0.0
-        final = with_off_peak_boost(replaced, free_kw, tou_type) if free_kw > 0 else replaced
-        out.append(
+    data = base.to_dict()
+    data.update(
+        {
+            "regular_kw": regular,
+            tier2_field: tier2,
+            "saturday_half_peak_kw": saturday,
+            "off_peak_kw": off_peak,
+        }
+    )
+    final = validate(ContractCapacity.from_dict(data), tou_type)
+    lower_used = round(final.saturday_half_peak_kw + final.off_peak_kw, 3)
+    free_used = min(free_total, lower_used)
+    return {
+        "id": "rule",
+        "contracts": final.to_dict(),
+        "regular_kw": round(final.regular_kw, 3),
+        "half_peak_delta_kw": round(final.half_peak_kw - base.half_peak_kw, 3),
+        "saturday_half_peak_delta_kw": round(
+            final.saturday_half_peak_kw - base.saturday_half_peak_kw, 3
+        ),
+        "off_peak_added_kw": round(final.off_peak_kw - base.off_peak_kw, 3),
+        "allowance_added_kw": round(free_used, 3),
+        "allowance_kw": allowance_kw(final, tou_type),
+        "original_total_kw": original_total,
+        "free_allowance_total_kw": free_total,
+        "free_allowance_used_kw": round(free_used, 3),
+        "billable_lower_kw": round(max(0.0, lower_used - free_total), 3),
+        "basis": [
             {
-                "id": label,
-                "contracts": final.to_dict(),
-                "regular_kw": r_new,
-                "half_peak_kw": round(float(final.half_peak_kw), 3),
-                "half_peak_delta_kw": round(float(final.half_peak_kw) - float(base.half_peak_kw), 3),
-                "saturday_half_peak_kw": round(float(final.saturday_half_peak_kw), 3),
-                "saturday_half_peak_delta_kw": round(
-                    float(final.saturday_half_peak_kw) - float(base.saturday_half_peak_kw), 3
-                ),
-                "off_peak_replaced_kw": round(off_add, 3),
-                "free_off_peak_added_kw": round(free_kw, 3),
-                "regular_delta_kw": round(delta_reg, 3),
-            }
-        )
-    return out
+                "period": "peak",
+                "max_grid_kw": round(peak_max, 3),
+                "buffer_kw": round(buf, 3),
+                "demand_ceiling_kw": round(regular, 3),
+                "contract_kw": round(final.regular_kw, 3),
+            },
+            {
+                "period": tier2_field.removesuffix("_kw"),
+                "max_grid_kw": round(tier2_max, 3),
+                "buffer_kw": 0.0,
+                "demand_ceiling_kw": round(tier2_demand, 3),
+                "contract_ceiling_kw": round(tier2_ceiling, 3),
+                "contract_kw": round(tier2, 3),
+            },
+            {
+                "period": "saturday_half_peak",
+                "max_grid_kw": round(sat_max, 3),
+                "buffer_kw": 0.0,
+                "demand_ceiling_kw": round(saturday_demand, 3),
+                "contract_ceiling_kw": round(saturday_ceiling, 3),
+                "contract_kw": round(saturday, 3),
+            },
+            {
+                "period": "off_peak",
+                "max_grid_kw": float(residual.get("off_peak_grid_max_kw") or 0),
+                "buffer_kw": 0.0,
+                "demand_ceiling_kw": round(off_peak_demand, 3),
+                "contract_ceiling_kw": round(off_peak_ceiling, 3),
+                "contract_kw": round(off_peak, 3),
+            },
+        ],
+    }
 
 
 def _saturday_off_peak_billable_kw(contracts: ContractCapacity) -> float:

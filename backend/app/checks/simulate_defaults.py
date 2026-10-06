@@ -7,6 +7,9 @@ def main() -> None:
     sim = default_simulate()
     assert 0 <= sim["socMin"] < sim["socMax"] <= 1
     assert 0.5 <= sim["chargeEff"] <= 1
+    assert 0 <= float(sim["bufferPct"]) <= 100
+    assert "bufferMinKw" not in sim
+    assert "bufferMaxKw" not in sim
     assert "calendarDeg" not in sim
     for key in (
         "reserveCapacityPrice",
@@ -14,10 +17,9 @@ def main() -> None:
         "reserveEnergyPrice",
         "reserveMonthlyDispatchCount",
         "evaluateContractReduction",
-        "autoAdjustOffPeakContract",
     ):
         assert key in sim
-        if key.endswith("Contract") or key.startswith("evaluate"):
+        if key.startswith("evaluate"):
             assert isinstance(sim[key], bool)
         else:
             assert float(sim[key]) >= 0

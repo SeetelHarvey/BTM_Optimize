@@ -11,26 +11,29 @@ from fastapi.responses import StreamingResponse
 
 from app.api import parse_json_form
 from app.services.bess.run import (
+    materialize_final_point,
     profile_bundle_from_sample,
     run_compare_bills,
-    run_dispatch_charts,
     run_export_xlsx,
     run_sample,
     run_sample_from_profile_cache,
     run_size_stage1,
     run_size_stage2,
+    _functions_without_reserve,
     _stage1_target_row,
 )
 from app.services.import_cache import (
-    charts_fingerprint,
+    compare_bill_fingerprint,
+    final_bundle_fingerprint,
     full_fingerprint,
     plan_fingerprint,
     profile_fingerprint,
     sample_fingerprint,
     stage1_fingerprint,
 )
-from app.services.bess.size_grid import normalize_sizing_strategies
-from app.services.import_store import ImportNotFound, get
+from app.services.bess.size_grid import normalize_energy_seeds, normalize_sizing_strategies
+from app.services.features.demand import seed_buffer_kw
+from app.services.import_store import ImportNotFound, get, get_final_bundle, put_final_bundle
 from app.services.tariff import annotate, apply_energy_prices, select_plan
 
 router = APIRouter(prefix="/simulate", tags=["simulate"])
@@ -43,6 +46,69 @@ def _public_sample(result: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
+def _strip_internal_bundles(result: dict[str, Any]) -> dict[str, Any]:
+    """回傳／摘要快取前去掉 worksheet 正本。"""
+    out = dict(result)
+    out.pop("_final_bundle", None)
+    out.pop("_sizing_bundle", None)
+    return out
+
+
+def _store_final_bundle(
+    stored: Any,
+    *,
+    plan_key: str,
+    contracts_obj: dict[str, Any],
+    sim_obj: dict[str, Any],
+    bundle: dict[str, Any],
+    functions: list[str] | None = None,
+) -> str | None:
+    """寫入最終工作表 LRU；回傳 fingerprint。"""
+    if not isinstance(bundle, dict) or bundle.get("worksheet") is None:
+        return None
+    pcs = float(bundle["pcs_kw"])
+    batt = float(bundle["batt_kwh"])
+    scheme = bundle.get("scheme_contracts") or contracts_obj
+    fns = list(functions or sim_obj.get("functions") or ["tou"])
+    fk = final_bundle_fingerprint(
+        plan_key=plan_key,
+        contracts=contracts_obj,
+        simulate=sim_obj,
+        pcs_kw=pcs,
+        batt_kwh=batt,
+        scheme_contracts=scheme,
+        functions=fns,
+    )
+    put_final_bundle(stored.caches, fk, bundle)
+    return fk
+
+
+def _lookup_final_bundle(
+    stored: Any,
+    *,
+    plan_key: str,
+    contracts_obj: dict[str, Any],
+    sim_obj: dict[str, Any],
+    pcs_kw: float,
+    batt_kwh: float,
+    scheme_contracts: dict[str, Any] | None = None,
+    functions: list[str] | None = None,
+) -> tuple[str, dict[str, Any] | None]:
+    """依最終口徑取工作表 bundle。"""
+    scheme = scheme_contracts if scheme_contracts is not None else contracts_obj
+    fns = list(functions or sim_obj.get("functions") or ["tou"])
+    fk = final_bundle_fingerprint(
+        plan_key=plan_key,
+        contracts=contracts_obj,
+        simulate=sim_obj,
+        pcs_kw=pcs_kw,
+        batt_kwh=batt_kwh,
+        scheme_contracts=scheme,
+        functions=fns,
+    )
+    return fk, get_final_bundle(stored.caches, fk)
+
+
 def _profile_sample_keys(
     plan_key: str,
     contracts_obj: dict[str, Any],
@@ -51,13 +117,17 @@ def _profile_sample_keys(
     profile_key = profile_fingerprint(
         plan_key=plan_key,
         contracts=contracts_obj,
-        buffer_kw=float(sim_obj.get("demandBufferKw") or 0),
+        buffer_kw=seed_buffer_kw(
+            sim_obj, contract_kw=float(contracts_obj.get("regular_kw") or 0)
+        ),
         charge_eff=float(sim_obj.get("chargeEff") or 0.85),
         include_half_peak=sim_obj.get("includeHalfPeak"),
-        auto_adjust_off_peak=bool(sim_obj.get("autoAdjustOffPeakContract")),
     )
     tiers = normalize_sizing_strategies(sim_obj.get("sizingStrategies"))
-    sample_key = sample_fingerprint(profile_key=profile_key, strategies=tiers)
+    ekeys = normalize_energy_seeds(sim_obj.get("sizingEnergySeeds"))
+    sample_key = sample_fingerprint(
+        profile_key=profile_key, strategies=tiers, energy_keys=ekeys
+    )
     return profile_key, sample_key, tiers
 
 
@@ -312,7 +382,7 @@ async def api_simulate_size(
         )
         hit = stored.caches.get(s1_key)
         if isinstance(hit, dict) and "grid" in hit:
-            return hit
+            return _strip_internal_bundles(hit)
 
         profile_key, _sample_key, _tiers = _profile_sample_keys(
             plan_key, contracts_obj, sim_obj
@@ -338,27 +408,21 @@ async def api_simulate_size(
             baseline_plan=baseline_plan,
             baseline_df=baseline_df,
         )
-        result = {**result, "stage1_key": s1_key}
-        stored.caches[s1_key] = result
-        # 僅儲能調度圖進 charts 快取（表單契約）；契約調整後圖由 /full 另存
-        rec = result.get("recommended") or result.get("best_effort")
-        if rec and result.get("dispatch_charts"):
-            ck = charts_fingerprint(
+        final_bundle = result.get("_final_bundle")
+        sizing_fns = _functions_without_reserve(
+            list(result.get("functions") or sim_obj.get("functions") or ["tou"])
+        )
+        if final_bundle is not None:
+            _store_final_bundle(
+                stored,
                 plan_key=plan_key,
-                contracts=contracts_obj,
-                simulate=sim_obj,
-                pcs_kw=float(rec["pcs_kw"]),
-                batt_kwh=float(rec["batt_kwh"]),
+                contracts_obj=contracts_obj,
+                sim_obj=sim_obj,
+                bundle=final_bundle,
+                functions=sizing_fns,
             )
-            stored.caches[ck] = {
-                "key": f'{round(float(rec["pcs_kw"]), 3)}_{round(float(rec["batt_kwh"]), 3)}',
-                "pcs_kw": float(rec["pcs_kw"]),
-                "batt_kwh": float(rec["batt_kwh"]),
-                "charts": result["dispatch_charts"],
-                "tou_meta": result.get("tou_meta"),
-                "reserve_meta": result.get("reserve_meta"),
-                "energy_transfer": result.get("energy_transfer"),
-            }
+        result = {**_strip_internal_bundles(result), "stage1_key": s1_key}
+        stored.caches[s1_key] = result
         return result
     except ImportNotFound as e:
         raise HTTPException(404, "import not found") from e
@@ -442,12 +506,12 @@ async def api_simulate_full(
         )
         hit = stored.caches.get(full_key)
         if isinstance(hit, dict) and "grid" in hit:
-            return hit
+            return _strip_internal_bundles(hit)
 
         if not stage1.get("need_full"):
             result = {**stage1, "stage1_key": stage1_key, "need_full": False}
-            stored.caches[full_key] = result
-            return result
+            stored.caches[full_key] = _strip_internal_bundles(result)
+            return stored.caches[full_key]
 
         result = await asyncio.to_thread(
             run_size_stage2,
@@ -464,34 +528,33 @@ async def api_simulate_full(
             overage_rules=rules_obj,
             baseline_tou_type=baseline_tou,
             baseline_df=baseline_df,
+            baseline_contracts=baseline_contracts_obj,
+            baseline_plan=_baseline_plan,
             pcs_kw=target_pcs,
             batt_kwh=target_batt,
         )
-        result = {**result, "stage1_key": stage1_key}
-        stored.caches[full_key] = result
-
+        final_bundle = result.get("_final_bundle")
         final = (result.get("stage2") or {}).get("final") or result.get("final")
         adopted = (final or {}).get("stage2_contracts") or contracts_obj
-        if final and final.get("dispatch_charts"):
-            ck = charts_fingerprint(
+        full_fns = list(result.get("functions") or sim_obj.get("functions") or ["tou"])
+        # rollback 備轉時功能集合不含 reserve（物化時已用 l1 settings）
+        if (final or {}).get("stage2_warning") == "reserve_no_net_gain" or (
+            (final or {}).get("reserve_meta") or {}
+        ).get("rolled_back"):
+            full_fns = _functions_without_reserve(full_fns)
+        if final_bundle is not None:
+            _store_final_bundle(
+                stored,
                 plan_key=plan_key,
-                contracts=adopted,
-                simulate=sim_obj,
-                pcs_kw=float(final["pcs_kw"]),
-                batt_kwh=float(final["batt_kwh"]),
+                contracts_obj=contracts_obj,
+                sim_obj=sim_obj,
+                bundle=final_bundle,
+                functions=full_fns,
             )
-            # 勿覆寫僅儲能調度圖：採用契約不同時 key 本就不同
-            stored.caches[ck] = {
-                "key": f'{round(float(final["pcs_kw"]), 3)}_{round(float(final["batt_kwh"]), 3)}',
-                "pcs_kw": float(final["pcs_kw"]),
-                "batt_kwh": float(final["batt_kwh"]),
-                "charts": final["dispatch_charts"],
-                "tou_meta": (final or {}).get("tou_meta") or result.get("tou_meta"),
-                "reserve_meta": (final or {}).get("reserve_meta")
-                or result.get("reserve_meta"),
-                "energy_transfer": (final or {}).get("energy_transfer")
-                or result.get("energy_transfer"),
-            }
+        result = {**_strip_internal_bundles(result), "stage1_key": stage1_key}
+        if adopted:
+            result["scheme_contracts"] = adopted
+        stored.caches[full_key] = result
         return result
     except HTTPException:
         raise
@@ -512,8 +575,9 @@ async def api_simulate_dispatch_charts(
     schedule: str | None = Form(None),
     holidays: str | None = Form(None),
     baseline_contracts: str | None = Form(None),
+    scheme_contracts: str | None = Form(None),
 ):
-    """已匯入負載 + (pcs,batt) → 調度圖。"""
+    """已匯入負載 + (pcs,batt) → 調度圖（優先讀最終工作表）。"""
     try:
         (
             stored,
@@ -540,32 +604,71 @@ async def api_simulate_dispatch_charts(
         )
         if pcs_kw <= 0 or batt_kwh <= 0:
             raise ValueError("pcs_kw and batt_kwh must be positive")
-        chart_key = charts_fingerprint(
+        scheme_raw = parse_json_form(scheme_contracts, None) if scheme_contracts else None
+        scheme_obj = scheme_raw if isinstance(scheme_raw, dict) else None
+        # 有採用契約＝最終層（含契約／備轉）；否則僅儲能功能集合
+        if scheme_obj is not None:
+            fns = list(sim_obj.get("functions") or ["tou"])
+        else:
+            fns = _functions_without_reserve(list(sim_obj.get("functions") or ["tou"]))
+        _fk, bundle = _lookup_final_bundle(
+            stored,
             plan_key=plan_key,
-            contracts=contracts_obj,
-            simulate=sim_obj,
+            contracts_obj=contracts_obj,
+            sim_obj=sim_obj,
             pcs_kw=pcs_kw,
             batt_kwh=batt_kwh,
+            scheme_contracts=scheme_obj,
+            functions=fns,
         )
-        hit = stored.caches.get(chart_key)
-        if isinstance(hit, dict) and hit.get("charts") is not None:
-            return hit
+        if bundle is not None:
+            return {
+                "key": bundle.get("key"),
+                "pcs_kw": bundle["pcs_kw"],
+                "batt_kwh": bundle["batt_kwh"],
+                "charts": bundle.get("charts"),
+                "tou_meta": bundle.get("tou_meta"),
+                "reserve_meta": bundle.get("reserve_meta"),
+                "energy_transfer": bundle.get("energy_transfer"),
+            }
 
         result = await asyncio.to_thread(
-            run_dispatch_charts,
+            materialize_final_point,
             df,
             plan,
             contracts_obj,
-            sim_obj,
+            {**sim_obj, "functions": fns},
             pcs_kw=pcs_kw,
             batt_kwh=batt_kwh,
             tou_type=simulate_tou,
+            start_date=str(stored.start_date),
+            end_date=str(stored.end_date),
+            voltage_level=str(stored.voltage_level),
             period_schedule=schedule_obj,
+            overage_rules=sim_obj.get("overageRules")
+            if isinstance(sim_obj.get("overageRules"), dict)
+            else None,
             baseline_df=baseline_df,
             baseline_tou=_baseline_tou,
+            scheme_contracts=scheme_obj or contracts_obj,
         )
-        stored.caches[chart_key] = result
-        return result
+        _store_final_bundle(
+            stored,
+            plan_key=plan_key,
+            contracts_obj=contracts_obj,
+            sim_obj=sim_obj,
+            bundle=result,
+            functions=fns,
+        )
+        return {
+            "key": result.get("key"),
+            "pcs_kw": result["pcs_kw"],
+            "batt_kwh": result["batt_kwh"],
+            "charts": result.get("charts"),
+            "tou_meta": result.get("tou_meta"),
+            "reserve_meta": result.get("reserve_meta"),
+            "energy_transfer": result.get("energy_transfer"),
+        }
     except ImportNotFound as e:
         raise HTTPException(404, "import not found") from e
     except (ValueError, KeyError, TypeError, json.JSONDecodeError) as e:
@@ -596,7 +699,7 @@ async def api_simulate_compare_bill(
             simulate_tou,
             schedule_obj,
             _holidays,
-            _plan_key,
+            plan_key,
             baseline_contracts_obj,
             baseline_tou,
             baseline_plan,
@@ -614,12 +717,55 @@ async def api_simulate_compare_bill(
             raise ValueError("pcs_kw and batt_kwh must be positive")
         scheme_raw = parse_json_form(scheme_contracts, None) if scheme_contracts else None
         scheme_obj = scheme_raw if isinstance(scheme_raw, dict) else None
-        return await asyncio.to_thread(
+        if scheme_obj is not None:
+            fns = list(sim_obj.get("functions") or ["tou"])
+        else:
+            fns = _functions_without_reserve(list(sim_obj.get("functions") or ["tou"]))
+        _fk, bundle = _lookup_final_bundle(
+            stored,
+            plan_key=plan_key,
+            contracts_obj=contracts_obj,
+            sim_obj=sim_obj,
+            pcs_kw=pcs_kw,
+            batt_kwh=batt_kwh,
+            scheme_contracts=scheme_obj,
+            functions=fns,
+        )
+        if bundle is not None and bundle.get("baseline") is not None and bundle.get("scheme") is not None:
+            return {
+                "baseline": bundle["baseline"],
+                "scheme": bundle["scheme"],
+                "reserve_income": bundle.get("reserve_income"),
+                "meta": {
+                    "pcs_kw": pcs_kw,
+                    "batt_kwh": batt_kwh,
+                    "baseline_tou": baseline_tou,
+                    "simulate_tou": simulate_tou,
+                    "baseline_contracts": baseline_contracts_obj,
+                    "scheme_contracts": scheme_obj or contracts_obj,
+                },
+            }
+
+        compare_key = compare_bill_fingerprint(
+            plan_key=plan_key,
+            contracts=contracts_obj,
+            simulate=sim_obj,
+            pcs_kw=pcs_kw,
+            batt_kwh=batt_kwh,
+            baseline_contracts=baseline_contracts_obj,
+            baseline_tou=baseline_tou,
+            scheme_contracts=scheme_obj,
+        )
+        hit = stored.caches.get(compare_key)
+        if isinstance(hit, dict) and hit.get("baseline") is not None and hit.get("scheme") is not None:
+            return hit
+
+        result = await asyncio.to_thread(
             run_compare_bills,
             df,
             plan,
             contracts_obj,
-            sim_obj,
+            {**sim_obj, "functions": fns},
             pcs_kw=pcs_kw,
             batt_kwh=batt_kwh,
             tou_type=simulate_tou,
@@ -632,7 +778,20 @@ async def api_simulate_compare_bill(
             baseline_tou=baseline_tou,
             baseline_plan=baseline_plan,
             scheme_contracts=scheme_obj,
+            worksheet=bundle.get("worksheet") if bundle else None,
         )
+        inner = result.pop("_bundle", None)
+        if inner is not None:
+            _store_final_bundle(
+                stored,
+                plan_key=plan_key,
+                contracts_obj=contracts_obj,
+                sim_obj=sim_obj,
+                bundle=inner,
+                functions=fns,
+            )
+        stored.caches[compare_key] = result
+        return result
     except ImportNotFound as e:
         raise HTTPException(404, "import not found") from e
     except (ValueError, KeyError, TypeError, json.JSONDecodeError) as e:
@@ -663,7 +822,7 @@ async def api_simulate_export(
             simulate_tou,
             schedule_obj,
             _holidays,
-            _plan_key,
+            plan_key,
             baseline_contracts_obj,
             baseline_tou,
             baseline_plan,
@@ -681,12 +840,57 @@ async def api_simulate_export(
             raise ValueError("pcs_kw and batt_kwh must be positive")
         scheme_raw = parse_json_form(scheme_contracts, None) if scheme_contracts else None
         scheme_obj = scheme_raw if isinstance(scheme_raw, dict) else None
+        if scheme_obj is not None:
+            fns = list(sim_obj.get("functions") or ["tou"])
+        else:
+            fns = _functions_without_reserve(list(sim_obj.get("functions") or ["tou"]))
+        _fk, bundle = _lookup_final_bundle(
+            stored,
+            plan_key=plan_key,
+            contracts_obj=contracts_obj,
+            sim_obj=sim_obj,
+            pcs_kw=pcs_kw,
+            batt_kwh=batt_kwh,
+            scheme_contracts=scheme_obj,
+            functions=fns,
+        )
+        ws = bundle.get("worksheet") if bundle else None
+        if ws is None and bundle is None:
+            # miss：物化一次再匯出
+            made = await asyncio.to_thread(
+                materialize_final_point,
+                df,
+                plan,
+                contracts_obj,
+                {**sim_obj, "functions": fns},
+                pcs_kw=pcs_kw,
+                batt_kwh=batt_kwh,
+                tou_type=simulate_tou,
+                start_date=str(stored.start_date),
+                end_date=str(stored.end_date),
+                voltage_level=str(stored.voltage_level),
+                period_schedule=schedule_obj,
+                baseline_df=baseline_df,
+                baseline_tou=baseline_tou,
+                baseline_contracts=baseline_contracts_obj,
+                baseline_plan=baseline_plan,
+                scheme_contracts=scheme_obj or contracts_obj,
+            )
+            _store_final_bundle(
+                stored,
+                plan_key=plan_key,
+                contracts_obj=contracts_obj,
+                sim_obj=sim_obj,
+                bundle=made,
+                functions=fns,
+            )
+            ws = made["worksheet"]
         raw = await asyncio.to_thread(
             run_export_xlsx,
             df,
             plan,
             contracts_obj,
-            sim_obj,
+            {**sim_obj, "functions": fns},
             pcs_kw=pcs_kw,
             batt_kwh=batt_kwh,
             tou_type=simulate_tou,
@@ -699,6 +903,7 @@ async def api_simulate_export(
             start_date=str(stored.start_date),
             end_date=str(stored.end_date),
             voltage_level=str(stored.voltage_level),
+            worksheet=ws,
         )
         name = f"btm_sim_{round(pcs_kw)}_{round(batt_kwh)}kWh_15min.xlsx"
         return StreamingResponse(

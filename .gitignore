@@ -3,4 +3,6 @@
 __pycache__/
 _archive/
 .cursor/
+_tmp*
+*_tmp_out.txt
 

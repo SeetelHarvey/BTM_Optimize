@@ -11,7 +11,7 @@ router = APIRouter(prefix="/charts", tags=["charts"])
 
 @router.post("")
 async def api_charts(import_id: str = Form(...)):
-    """已匯入序列 → heatmap / boxplot / line（同 import 快取）。"""
+    """已匯入序列 → 每天 × 96 格（同 import 快取）。"""
     try:
         stored = get(import_id)
     except ImportNotFound as e:

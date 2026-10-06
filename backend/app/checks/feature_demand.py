@@ -5,6 +5,20 @@ from app.services.features import demand
 
 
 def main() -> None:
+    settings = {"bufferPct": 3}
+    assert demand.suggested_buffer_kw(1000, settings) == 30.0
+    assert demand.suggested_buffer_kw(333, settings) == 10.0  # 9.99 → 10
+    assert demand.scaled_buffer_kw(1000, settings) == 30.0
+    assert demand.seed_buffer_kw(settings, contract_kw=1000) == 30.0
+    # 使用者填寫優先，同樣向上取 10
+    assert demand.resolve_buffer_kw(
+        {"bufferPct": 3, "demandBufferKw": 12}, contract_kw=1000, key="demandBufferKw"
+    ) == 20.0
+    assert demand.resolve_buffer_kw(
+        {"bufferPct": 3, "antiExportKw": 8}, contract_kw=1000, key="antiExportKw"
+    ) == 10.0
+    assert demand.scaled_buffer_kw(1000, {"demandBufferKw": 10}) == 10.0
+
     c = ContractCapacity(regular_kw=1000)
     out = demand.intent(
         load_kw=1050,

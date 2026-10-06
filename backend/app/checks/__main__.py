@@ -13,6 +13,7 @@ _MODULES = (
     "app.checks.simulate_defaults",
     "app.checks.simulate_size",
     "app.checks.import_io",
+    "app.checks.pcs_power_matrix",
 )
 
 def main() -> None:

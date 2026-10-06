@@ -21,13 +21,12 @@ from app.services.charts import build_dispatch_charts
 from app.services.contracts import (
     ContractCapacity,
     cumulative_ceiling,
-    free_off_peak_kw,
-    hierarchical_contract_candidates,
+    rule_based_contract_proposal,
     suggest_regular_kw_from_dispatch,
     validate,
-    with_off_peak_boost,
 )
 from app.services.features import reserve, tou
+from app.services.features.demand import regular_kw_of, resolve_buffer_kw, seed_buffer_kw, scaled_buffer_kw
 from app.services.schedule import hours_per_data_row
 
 
@@ -39,6 +38,20 @@ def _settings_tiers(settings: dict[str, Any]) -> list[str]:
 def _settings_energy_seeds(settings: dict[str, Any]) -> list[str]:
     """從試算設定讀電量面向多選。"""
     return normalize_energy_seeds(settings.get("sizingEnergySeeds"))
+
+
+def manual_size_point(settings: dict[str, Any]) -> tuple[float, float] | None:
+    """指定一組時回傳 (pcs_kw, batt_kwh)；組合試算回傳 None。"""
+    if str(settings.get("sizingMode") or "grid") != "single":
+        return None
+    try:
+        pcs = float(settings.get("manualPcsKw") or 0)
+        batt = float(settings.get("manualBattKwh") or 0)
+    except (TypeError, ValueError) as e:
+        raise ValueError("pcs_kw and batt_kwh must be > 0") from e
+    if pcs <= 0 or batt <= 0:
+        raise ValueError("pcs_kw and batt_kwh must be > 0")
+    return (round(pcs, 3), round(batt, 3))
 
 
 def _dispatch_chart_key(pcs_kw: float, batt_kwh: float) -> str:
@@ -53,100 +66,12 @@ _METRIC_KEYS = (
 )
 
 
-def _peak_kwh(df: pd.DataFrame) -> float:
-    """尖峰時段總用電 kWh。"""
-    dt = hours_per_data_row()
-    if df.empty or "period" not in df.columns:
-        return 0.0
-    peak = df.loc[df["period"] == "peak", "kW"].astype(float)
-    return float(peak.sum() * dt)
-
-
-def _off_peak_headroom_kwh(
-    df: pd.DataFrame,
-    contracts: ContractCapacity,
-    tou_type: str,
-    buffer_kw: float,
-) -> float:
-    """離峰時段可充電裕度 kWh（契約上限 − 裕度 − 負載）。"""
-    dt = hours_per_data_row()
-    if df.empty or "period" not in df.columns:
-        return 0.0
-    cap = validate(contracts, tou_type)
-    off = df.loc[df["period"] == "off_peak"]
-    if off.empty:
-        return 0.0
-    ceiling = cumulative_ceiling("off_peak", cap)
-    margin = (ceiling - buffer_kw - off["kW"].astype(float)).clip(lower=0.0)
-    return float(margin.sum() * dt)
-
-
-def _contract_adjustment(
-    df: pd.DataFrame,
-    contracts: ContractCapacity,
-    tou_type: str,
-    *,
-    enabled: bool,
-    buffer_kw: float,
-) -> tuple[ContractCapacity, dict[str, Any]]:
-    """試算前離峰契約自動增額；回傳有效契約與說明。"""
-    cap = validate(contracts, tou_type)
-    free_kw = free_off_peak_kw(cap, tou_type)
-    peak_kwh = round(_peak_kwh(df), 1)
-    headroom_kwh = round(_off_peak_headroom_kwh(df, cap, tou_type, buffer_kw), 1)
-    info: dict[str, Any] = {
-        "applied": False,
-        "reason": "",
-        "peak_kwh": peak_kwh,
-        "off_peak_headroom_kwh": headroom_kwh,
-        "free_quota_kw": round(free_kw, 1),
-        "added_kw": 0.0,
-        "off_peak_kw_before": cap.off_peak_kw,
-        "off_peak_kw_after": cap.off_peak_kw,
-    }
-    if not enabled:
-        info["reason"] = "disabled"
-        return cap, info
-    if peak_kwh <= headroom_kwh:
-        info["reason"] = "sufficient_headroom"
-        return cap, info
-    if free_kw <= 0:
-        info["reason"] = "no_free_quota"
-        return cap, info
-    adjusted = with_off_peak_boost(cap, free_kw, tou_type)
-    info.update(
-        {
-            "applied": True,
-            "reason": "peak_exceeds_headroom",
-            "added_kw": round(free_kw, 1),
-            "off_peak_kw_after": adjusted.off_peak_kw,
-        }
-    )
-    return adjusted, info
-
-
 def prepare_effective_contracts(
-    df: pd.DataFrame,
     contracts: dict[str, Any],
-    settings: dict[str, Any],
     tou_type: str,
-    *,
-    allow_off_peak_boost: bool = False,
-) -> tuple[dict[str, Any], dict[str, Any]]:
-    """試算用有效契約；離峰免費增額預設改由契約候選層處理。"""
-    cap = ContractCapacity.from_dict(contracts)
-    buffer_kw = float(settings.get("demandBufferKw") or 0)
-    auto_adj = bool(allow_off_peak_boost) and bool(
-        settings.get("autoAdjustOffPeakContract")
-    )
-    effective_cap, info = _contract_adjustment(
-        df,
-        cap,
-        tou_type,
-        enabled=auto_adj,
-        buffer_kw=buffer_kw,
-    )
-    return effective_cap.to_dict(), info
+) -> dict[str, Any]:
+    """驗證契約欄位後回傳（容許額度補額僅在 Stage2 候選層）。"""
+    return validate(ContractCapacity.from_dict(contracts), tou_type).to_dict()
 
 
 def run_sample(
@@ -159,10 +84,8 @@ def run_sample(
     prices: dict | None = None,
 ) -> dict[str, Any]:
     """試算前樣本預覽（尚未 dispatch）；與 run_size 同一套有效契約／組合。"""
-    effective_contracts, contract_adjustment = prepare_effective_contracts(
-        df, contracts, settings, tou_type
-    )
-    buffer_kw = float(settings.get("demandBufferKw") or 0)
+    effective_contracts = prepare_effective_contracts(contracts, tou_type)
+    buffer_kw = seed_buffer_kw(settings, contract_kw=regular_kw_of(effective_contracts))
     tiers = _settings_tiers(settings)
     energy_keys = _settings_energy_seeds(settings)
     sample = plan_sample_grid(
@@ -187,7 +110,6 @@ def run_sample(
         "sample_source": sample["sample_source"],
         "grid_points": sample["grid_points"],
         "combinations": sample.get("combinations"),
-        "contract_adjustment": contract_adjustment,
         "regular_kw": float(ContractCapacity.from_dict(effective_contracts).regular_kw),
     }
 
@@ -197,7 +119,6 @@ def profile_bundle_from_sample(sample_result: dict[str, Any]) -> dict[str, Any]:
     return {
         "diagnosis": sample_result.get("diagnosis"),
         "profile_stats": sample_result["profile_stats"],
-        "contract_adjustment": sample_result.get("contract_adjustment"),
         "regular_kw": float(sample_result.get("regular_kw") or 0),
     }
 
@@ -228,7 +149,6 @@ def run_sample_from_profile_cache(
         "sample_source": sample["sample_source"],
         "grid_points": sample["grid_points"],
         "combinations": sample.get("combinations"),
-        "contract_adjustment": profile_cache.get("contract_adjustment"),
         "regular_kw": float(profile_cache.get("regular_kw") or 0),
     }
 
@@ -239,6 +159,103 @@ def _bill_totals(bill: dict[str, Any]) -> dict[str, Any]:
         "basic_total": bill.get("basic_total"),
         "overage_total": bill.get("overage_total"),
         "energy_total": bill.get("energy_total"),
+    }
+
+
+def _build_benefit_report(
+    *,
+    before: dict[str, Any],
+    after: dict[str, Any],
+    energy_transfer: dict[str, Any] | None,
+    reserve_income: dict[str, Any] | None,
+    reserve_meta: dict[str, Any] | None,
+    functions: list[str],
+    feature_summaries: list[dict[str, Any]],
+    stage: str,
+    pending: bool,
+    baseline_tou: str | None,
+    simulate_tou: str | None,
+) -> dict[str, Any]:
+    """效益報告單一金額口徑：電費三分項＋備轉收入。"""
+
+    def amount(source: dict[str, Any], key: str) -> int:
+        return int(source.get(key) or 0)
+
+    def line(key: str) -> dict[str, int]:
+        before_value = amount(before, key)
+        after_value = amount(after, key)
+        return {
+            "before": before_value,
+            "after": after_value,
+            "benefit": before_value - after_value,
+        }
+
+    summaries = {
+        str(summary.get("id") or ""): summary
+        for summary in feature_summaries
+        if summary.get("id")
+    }
+    demand_summary = summaries.get("demand")
+    reserve_summary = summaries.get("reserve")
+    contract_adopted = bool(
+        demand_summary and demand_summary.get("status") == "adopted"
+    )
+    plan_changed = bool(
+        baseline_tou and simulate_tou and str(baseline_tou) != str(simulate_tou)
+    )
+
+    basic = line("basic_total")
+    energy = line("energy_total")
+    overage = line("overage_total")
+    basic["visible"] = bool(basic["benefit"] != 0 or contract_adopted)
+    basic["source"] = (
+        "both"
+        if contract_adopted and plan_changed
+        else ("contract" if contract_adopted else ("plan" if plan_changed else "unchanged"))
+    )
+    basic["evaluation"] = demand_summary
+
+    energy["visible"] = True
+    energy["transfer"] = energy_transfer or {}
+    overage["visible"] = True
+
+    reserve_enabled = "reserve" in functions
+    income = reserve_income or {}
+    extra_income = int(income.get("total") or 0) if reserve_enabled and not pending else 0
+    extra = {
+        "visible": bool(reserve_enabled and not pending),
+        "benefit": extra_income,
+        "capacity": int(income.get("capacity") or 0),
+        "performance": int(income.get("performance") or 0),
+        "activation_energy": int(income.get("activation_energy") or 0),
+        "income": income,
+        "meta": reserve_meta,
+        "evaluation": reserve_summary,
+    }
+
+    bill_savings = basic["benefit"] + energy["benefit"] + overage["benefit"]
+    after_total = amount(after, "total")
+    total_benefit = bill_savings + extra_income
+    return {
+        "summary": {
+            "after_bill_total": after_total,
+            "bill_savings": bill_savings,
+            "extra_income": extra_income,
+            "total_benefit": total_benefit,
+            "pending": bool(pending),
+        },
+        "sections": {
+            "basic": basic,
+            "energy": energy,
+            "overage": overage,
+            "extra": extra,
+        },
+        "meta": {
+            "stage": stage,
+            "baseline_tou": baseline_tou,
+            "simulate_tou": simulate_tou,
+            "functions": list(functions),
+        },
     }
 
 
@@ -308,10 +325,13 @@ def energy_transfer_payload(
             str(r["period"]),
         )
     )
+    # 有效轉移量：從較貴時段搬走的電量（delta_kWh < 0 加總；負＝移出）
+    effective = round(sum(float(r["delta_kwh"]) for r in rows if float(r["delta_kwh"]) < 0), 1)
     return {
         "rows": rows,
         "baseline_tou": baseline_tou,
         "simulate_tou": simulate_tou,
+        "effective_transfer_kwh": effective,
     }
 
 
@@ -532,6 +552,192 @@ def _final_constraints(
     }
 
 
+def _summary_metric(key: str, value: Any) -> dict[str, Any] | None:
+    """功能卡單一指標；空值略過。"""
+    return None if value is None else {"key": key, "value": value}
+
+
+def _summary_demand(ctx: dict[str, Any]) -> dict[str, Any] | None:
+    """自動調整契約容量摘要（第2層；尚未評估時不湊空卡）。"""
+    proposal = ((ctx.get("proposal") or {}).get("contracts") or {})
+    reduction = proposal.get("reduction") or {}
+    selected = proposal.get("selected") or {}
+    rule = proposal.get("rule") or {}
+    if not reduction and not rule:
+        return None
+    constraints = ctx.get("constraints") or {}
+    selected_contracts = dict(
+        proposal.get("suggested")
+        or constraints.get("contracts")
+        or ctx.get("contracts")
+        or {}
+    )
+    proposed_contracts = dict(proposal.get("proposed") or selected_contracts)
+    current_contracts = dict(proposal.get("original") or {})
+    if not current_contracts:
+        current_contracts = {
+            "regular_kw": float(reduction.get("current_regular_kw") or 0),
+        }
+    selected_id = str(selected.get("id") or "baseline")
+    changed = bool(rule.get("adopted"))
+    reason = "contract_rule_adopted" if changed else "contract_no_gain"
+    failed_check = next(
+        (
+            check
+            for check in (rule.get("feasibility") or [])
+            if not check.get("ok")
+        ),
+        None,
+    )
+    current_regular = float(
+        current_contracts.get("regular_kw")
+        or reduction.get("current_regular_kw")
+        or 0
+    )
+    selected_regular = float(selected_contracts.get("regular_kw") or 0)
+    adj_src = rule
+    metrics = [
+        _summary_metric("regular_kw", selected_regular),
+        _summary_metric("max_kw", reduction.get("peak_grid_max_kw")),
+        _summary_metric(
+            "reducible_kw", max(0.0, current_regular - selected_regular)
+        ),
+        _summary_metric("half_peak_delta_kw", adj_src.get("half_peak_delta_kw")),
+        _summary_metric("allowance_kw", adj_src.get("allowance_added_kw")),
+    ]
+    return {
+        "id": "demand",
+        "status": "adopted" if changed else "unchanged",
+        "metrics": [x for x in metrics if x is not None],
+        "benefit": int((ctx.get("benefit_split") or {}).get("contract_gain") or 0),
+        "reason": reason,
+        "decision": {
+            "current_contracts": current_contracts,
+            "proposed_contracts": proposed_contracts,
+            "selected_contracts": selected_contracts,
+            "selected_id": selected_id,
+            "adopted": changed,
+            "current_regular_kw": current_regular,
+            "selected_regular_kw": selected_regular,
+            "max_kw": reduction.get("peak_grid_max_kw"),
+            "buffer_kw": reduction.get("buffer_kw"),
+            "reducible_kw": max(0.0, current_regular - selected_regular),
+            "reject_reason": rule.get("reject_reason"),
+            "failed_check": failed_check,
+            "basis": list(rule.get("basis") or []),
+            "original_total_kw": rule.get("original_total_kw"),
+            "free_allowance_total_kw": rule.get("free_allowance_total_kw"),
+            "free_allowance_used_kw": rule.get("free_allowance_used_kw"),
+            "billable_lower_kw": rule.get("billable_lower_kw"),
+            "current_bill": proposal.get("current_bill"),
+            "proposed_bill": proposal.get("proposed_bill"),
+            "bill_delta": rule.get("bill_delta"),
+            "adjustments": {
+                "half_peak_delta_kw": adj_src.get("half_peak_delta_kw"),
+                "saturday_half_peak_delta_kw": adj_src.get(
+                    "saturday_half_peak_delta_kw"
+                ),
+                "off_peak_added_kw": adj_src.get("off_peak_added_kw"),
+                "allowance_added_kw": adj_src.get("allowance_added_kw"),
+            },
+        },
+    }
+
+
+def _summary_backup(ctx: dict[str, Any]) -> dict[str, Any]:
+    """備援功能摘要。"""
+    constraints = ctx.get("constraints") or {}
+    settings = ctx.get("settings") or {}
+    metrics = [
+        _summary_metric("backup_kwh", float(settings.get("backupReserveKwh") or 0)),
+        _summary_metric(
+            "soc_min_pct",
+            (
+                round(float(constraints["soc_min"]) * 100.0, 1)
+                if constraints.get("soc_min") is not None
+                else None
+            ),
+        ),
+    ]
+    return {
+        "id": "backup",
+        "status": "adopted",
+        "metrics": [x for x in metrics if x is not None],
+        "benefit": None,
+        "reason": "soc_floor",
+    }
+
+
+def _summary_reserve(ctx: dict[str, Any]) -> dict[str, Any]:
+    """即時備轉功能摘要。"""
+    proposal = ((ctx.get("proposal") or {}).get("reserve") or {})
+    meta = proposal.get("meta") or ctx.get("reserve_meta") or {}
+    income = proposal.get("income") or ctx.get("reserve_income") or {}
+    rolled_back = bool(proposal.get("rolled_back") or meta.get("rolled_back"))
+    metrics = [
+        _summary_metric("mode", meta.get("mode")),
+        _summary_metric("reserve_income", int(income.get("total") or 0)),
+    ]
+    return {
+        "id": "reserve",
+        "status": "rolled_back" if rolled_back else "adopted",
+        "metrics": [x for x in metrics if x is not None],
+        "benefit": int((ctx.get("benefit_split") or {}).get("reserve_gain") or 0),
+        "reason": (
+            "no_net_gain"
+            if rolled_back
+            else (
+                "manual_bid"
+                if str(meta.get("mode") or "auto") == "manual"
+                else "auto_bid"
+            )
+        ),
+    }
+
+
+_FEATURE_SUMMARY_BUILDERS = {
+    "demand": _summary_demand,
+    "backup": _summary_backup,
+    "reserve": _summary_reserve,
+}
+
+
+def _feature_summaries(
+    *,
+    settings: dict[str, Any],
+    functions: list[str],
+    constraints: dict[str, Any] | None,
+    benefit_split: dict[str, Any],
+    proposal: dict[str, Any] | None = None,
+    reserve_meta: dict[str, Any] | None = None,
+    reserve_income: dict[str, Any] | None = None,
+    contracts: dict[str, Any] | None = None,
+) -> list[dict[str, Any]]:
+    """已啟用功能 → 共用摘要契約。"""
+    enabled = set(functions or [])
+    # demand 功能＝自動調整契約容量（第2層）；防超約只看參數 demandBufferKw
+    want_contract = bool(settings.get("evaluateContractReduction")) or "demand" in enabled
+    if want_contract:
+        enabled.add("demand")
+    ctx = {
+        "settings": settings,
+        "constraints": constraints or {},
+        "benefit_split": benefit_split,
+        "proposal": proposal or {},
+        "reserve_meta": reserve_meta,
+        "reserve_income": reserve_income or {},
+        "contracts": contracts or {},
+        "evaluate_contract": want_contract,
+    }
+    return [
+        summary
+        for feature_id, builder in _FEATURE_SUMMARY_BUILDERS.items()
+        if feature_id in enabled
+        for summary in [builder(ctx)]
+        if summary is not None
+    ]
+
+
 def _make_device(settings: dict[str, Any], *, pcs_kw: float, batt_kwh: float) -> Device:
     return Device(
         pcs_kw=pcs_kw,
@@ -556,6 +762,10 @@ def _dispatch_for_point(
     period_schedule: dict | None = None,
 ) -> tuple[pd.DataFrame, dict[str, Any] | None, dict[str, Any] | None]:
     """單一 (pcs,batt) dispatch；回傳 (disp, reserve_info, tou_meta)。"""
+    reg = regular_kw_of(contracts)
+    demand_buf = resolve_buffer_kw(settings, contract_kw=reg, key="demandBufferKw")
+    anti = resolve_buffer_kw(settings, contract_kw=reg, key="antiExportKw")
+    settings = {**settings, "demandBufferKw": demand_buf, "antiExportKw": anti}
     dev = _make_device(settings, pcs_kw=pcs_kw, batt_kwh=batt_kwh)
     use_backup = "backup" in (settings.get("functions") or [])
     soc_min = float(dev.soc_min)
@@ -568,11 +778,8 @@ def _dispatch_for_point(
         soc_max = float(adj.soc_max)
 
     local = dict(settings)
-    local, tou_meta = tou.prepare_auto_tou(
-        df,
+    local, tou_meta = tou.resolve_tou_schedule(
         local,
-        pcs_kw=pcs_kw,
-        batt_kwh=batt_kwh,
         tou_type=tou_type,
         prices=plan.get("prices"),
         period_schedule=period_schedule,
@@ -922,38 +1129,6 @@ def _stage1_target_row(
     return None
 
 
-def _merge_stage2_into_row(
-    row: dict[str, Any] | None,
-    stage2_point: dict[str, Any],
-) -> dict[str, Any] | None:
-    """覆寫展示數值；保留 pcs／batt／身分旗標。"""
-    if not row:
-        return None
-    merged = dict(row)
-    for k in (
-        "bill_savings",
-        "savings",
-        "savings_pct",
-        "reserve_income_total",
-        "reserve_income",
-        "reserve_meta",
-        "tou_meta",
-        "energy_transfer",
-        "after_total",
-        "after_basic_total",
-        "after_overage_total",
-        "after_energy_total",
-        "dispatch_charts",
-        "stage2_contracts",
-        "contract_reduction",
-        "stage2_warning",
-        *_METRIC_KEYS,
-    ):
-        if k in stage2_point:
-            merged[k] = stage2_point[k]
-    return merged
-
-
 def _contracts_fingerprint(contracts: dict[str, Any]) -> tuple:
     """契約比對用（忽略多餘鍵）。"""
     keys = (
@@ -964,6 +1139,32 @@ def _contracts_fingerprint(contracts: dict[str, Any]) -> tuple:
         "off_peak_kw",
     )
     return tuple(round(float(contracts.get(k) or 0), 3) for k in keys)
+
+
+def _summary_from_grid_row(row: dict[str, Any], disp: Any) -> dict[str, Any]:
+    """Stage1 網格列＋既有 disp → 與 _simulate_point 同形摘要（不再調度）。"""
+    empty_reserve = {
+        "capacity": 0,
+        "performance": 0,
+        "activation_energy": 0,
+        "total": 0,
+        "monthly": {},
+        "events": [],
+        "data_note": "15min_estimate",
+    }
+    return {
+        "total": int(row.get("after_total") or 0),
+        "basic_total": int(row.get("after_basic_total") or 0),
+        "overage_total": int(row.get("after_overage_total") or 0),
+        "energy_total": int(row.get("after_energy_total") or 0),
+        "reserve_income": row.get("reserve_income") or empty_reserve,
+        "reserve_meta": row.get("reserve_meta"),
+        "tou_meta": row.get("tou_meta"),
+        "energy_transfer": row.get("energy_transfer"),
+        **{k: row.get(k) for k in _METRIC_KEYS},
+        "bill_savings": row.get("bill_savings"),
+        "disp": disp,
+    }
 
 
 def run_size_stage1(
@@ -984,7 +1185,7 @@ def run_size_stage1(
     baseline_plan: dict | None = None,
     baseline_df: pd.DataFrame | None = None,
 ) -> dict[str, Any]:
-    """量體選點＋電價調度（不含契約候選／備轉）。"""
+    """量體選點＋電價調度（不含契約重配／備轉）。"""
     import time
 
     t0 = time.perf_counter()
@@ -1001,15 +1202,25 @@ def run_size_stage1(
         baseline_contracts
     ) == _contracts_fingerprint(contracts)
 
-    effective_contracts, contract_adjustment = prepare_effective_contracts(
-        df, contracts, settings, tou_type, allow_off_peak_boost=False
-    )
+    effective_contracts = prepare_effective_contracts(contracts, tou_type)
     effective_cap = ContractCapacity.from_dict(effective_contracts)
-    buffer_kw = float(settings.get("demandBufferKw") or 0)
+    buffer_kw = seed_buffer_kw(settings, contract_kw=regular_kw_of(effective_cap))
     tiers = _settings_tiers(settings)
     energy_keys = _settings_energy_seeds(settings)
     t_profile = time.perf_counter()
-    if (
+    manual = manual_size_point(settings)
+    if manual is not None:
+        pcs_m, batt_m = manual
+        sample_full = {
+            "diagnosis": None,
+            "strategies": [],
+            "profile_stats": None,
+            "sample_source": "manual",
+            "combinations": [
+                {"pcs_kw": pcs_m, "batt_kwh": batt_m, "seed_source": "manual"}
+            ],
+        }
+    elif (
         isinstance(cached_profile, dict)
         and isinstance(cached_profile.get("profile_stats"), dict)
         and isinstance(cached_profile.get("diagnosis"), dict)
@@ -1048,7 +1259,9 @@ def run_size_stage1(
     if "large_user" in user_functions and float(effective_cap.regular_kw) < 5000:
         user_functions = [f for f in user_functions if f != "large_user"]
     want_reserve = "reserve" in user_functions
-    want_contract = bool(settings.get("evaluateContractReduction"))
+    want_contract = bool(settings.get("evaluateContractReduction")) or (
+        "demand" in user_functions
+    )
     need_full = want_reserve or want_contract
 
     sim_settings_l1 = {**settings, "functions": _functions_without_reserve(user_functions)}
@@ -1176,29 +1389,37 @@ def run_size_stage1(
     energy_transfer = (highlight or {}).get("energy_transfer")
 
     dispatch_charts = (highlight or {}).get("dispatch_charts")
-    if dispatch_charts is None and highlight:
-        chart_settings = {
-            **sim_settings_l1,
-            "autoAdjustOffPeakContract": False,
-        }
-        charts_payload = run_dispatch_charts(
+    final_bundle = None
+    # 需要 Stage2 時不在此物化；Final Bundle 由 Stage2 產生
+    if dispatch_charts is None and highlight and not (need_full and recommended):
+        final_bundle = materialize_final_point(
             df,
             plan,
             effective_contracts,
-            chart_settings,
+            sim_settings_l1,
             pcs_kw=float(highlight["pcs_kw"]),
             batt_kwh=float(highlight["batt_kwh"]),
             tou_type=tou_type,
+            start_date=start_date,
+            end_date=end_date,
+            voltage_level=voltage_level,
             period_schedule=schedule,
+            overage_rules=overage_rules,
             baseline_df=baseline_df,
             baseline_tou=baseline_tou,
+            baseline_contracts=baseline_contracts,
+            baseline_plan=baseline_plan,
+            scheme_contracts=effective_contracts,
         )
         dispatch_count += 1
-        if energy_transfer is None:
-            energy_transfer = charts_payload.get("energy_transfer")
-        dispatch_charts = charts_payload.get("charts")
+        energy_transfer = final_bundle.get("energy_transfer") or energy_transfer
+        dispatch_charts = final_bundle.get("charts")
         if tou_meta is None:
-            tou_meta = charts_payload.get("tou_meta")
+            tou_meta = final_bundle.get("tou_meta")
+        if final_bundle.get("after"):
+            after_rec = final_bundle["after"]
+        if final_bundle.get("before"):
+            before_summary = final_bundle["before"]
 
     savings_pct = (
         highlight.get("savings_pct")
@@ -1209,9 +1430,45 @@ def run_size_stage1(
     )
     timing["total_ms"] = round((time.perf_counter() - t0) * 1000, 1)
     timing["dispatch_count"] = dispatch_count
+    stage1_constraints = None
+    if highlight:
+        stage1_constraints = _final_constraints(
+            contracts=effective_contracts,
+            settings=sim_settings_l1,
+            tou_type=tou_type,
+            pcs_kw=float(highlight["pcs_kw"]),
+            batt_kwh=float(highlight["batt_kwh"]),
+            buffer_kw=resolve_buffer_kw(
+                sim_settings_l1,
+                contract_kw=regular_kw_of(effective_contracts),
+                key="demandBufferKw",
+            ),
+            reserve_meta=None,
+        )
+    feature_summaries = _feature_summaries(
+        settings=settings,
+        functions=user_functions,
+        constraints=stage1_constraints,
+        benefit_split=benefit_split,
+        reserve_meta=None,
+        reserve_income=reserve_income,
+        contracts=effective_contracts,
+    )
+    benefit_report = _build_benefit_report(
+        before=before_summary,
+        after=after_rec,
+        energy_transfer=energy_transfer,
+        reserve_income=reserve_income,
+        reserve_meta=reserve_meta,
+        functions=user_functions,
+        feature_summaries=feature_summaries,
+        stage="sizing",
+        pending=bool(need_full and recommended),
+        baseline_tou=baseline_tou,
+        simulate_tou=tou_type,
+    )
 
-    return {
-        "contract_adjustment": contract_adjustment,
+    out = {
         "diagnosis": sample_full.get("diagnosis"),
         "strategies": sample_full.get("strategies") or tiers,
         "profile_stats": sample_full["profile_stats"],
@@ -1235,19 +1492,25 @@ def run_size_stage1(
         "before": before_summary,
         "after": after_rec,
         "baseline_tou_type": baseline_tou,
+        "baseline_contracts": baseline_contracts,
         "simulate_tou_type": tou_type,
         "dispatch_charts": dispatch_charts,
         "stage1": stage1,
         "stage2": None,
         "benefit_split": benefit_split,
+        "benefit_report": benefit_report,
+        "feature_summaries": feature_summaries,
         "timing": timing,
         "evaluate_contract_reduction": want_contract,
         "final": recommended,
         "need_full": bool(need_full and recommended),
         "want_reserve": want_reserve,
         "want_contract": want_contract,
-        "sizing_dispatch_charts": dispatch_charts,
     }
+    if final_bundle is not None:
+        out["_final_bundle"] = final_bundle
+        out["scheme_contracts"] = effective_contracts
+    return out
 
 
 def run_size_stage2(
@@ -1265,10 +1528,12 @@ def run_size_stage2(
     overage_rules: dict | None = None,
     baseline_tou_type: str | None = None,
     baseline_df: pd.DataFrame | None = None,
+    baseline_contracts: dict[str, Any] | None = None,
+    baseline_plan: dict | None = None,
     pcs_kw: float | None = None,
     batt_kwh: float | None = None,
 ) -> dict[str, Any]:
-    """對指定量體（預設推薦）跑契約候選＋備轉；不重選量體。"""
+    """對指定量體（預設推薦）跑契約重配＋備轉；不重選量體。"""
     import time
 
     out = dict(stage1_result)
@@ -1279,7 +1544,7 @@ def run_size_stage2(
     )
     want_contract = bool(out.get("want_contract")) or bool(
         settings.get("evaluateContractReduction")
-    )
+    ) or ("demand" in (out.get("functions") or settings.get("functions") or []))
     if not target or not (want_reserve or want_contract):
         out["need_full"] = False
         out["stage2"] = None
@@ -1289,14 +1554,25 @@ def run_size_stage2(
     timing = dict(out.get("timing") or {})
     dispatch_count = int(timing.get("dispatch_count") or 0)
 
-    baseline_tou = baseline_tou_type or tou_type
+    baseline_tou = baseline_tou_type or out.get("baseline_tou_type") or tou_type
     baseline_df = baseline_df if baseline_df is not None else df
     stage1 = out.get("stage1") or {}
     effective_contracts = dict(stage1.get("contracts") or contracts)
+    # 原始帳單契約：與 Stage1 before 同口徑；不可回退成 Stage2 採用契約
+    baseline_contracts = (
+        baseline_contracts
+        if baseline_contracts is not None
+        else out.get("baseline_contracts")
+    )
+    if baseline_contracts is None:
+        baseline_contracts = effective_contracts
+    baseline_plan = (
+        baseline_plan if baseline_plan is not None else out.get("baseline_plan")
+    )
     effective_cap = ContractCapacity.from_dict(effective_contracts)
+    # 所有配置共用同一 before（Stage1 原始帳單）；各點只換 after
     before_summary = out.get("before") or stage1.get("before") or {}
     before_total = int(before_summary.get("total") or 0)
-    buffer_kw = float(settings.get("demandBufferKw") or 0)
     user_functions = list(out.get("functions") or settings.get("functions") or ["tou"])
     sim_settings_l1 = {
         **settings,
@@ -1307,6 +1583,7 @@ def run_size_stage2(
 
     pcs_kw = float(target["pcs_kw"])
     batt_kwh = float(target["batt_kwh"])
+    buffer_kw = scaled_buffer_kw(regular_kw_of(effective_contracts), settings)
     stage1_total = int(target.get("after_total") or 0)
     if stage1_total <= 0 and recommended and _row_key_pair(
         recommended["pcs_kw"], recommended["batt_kwh"]
@@ -1315,10 +1592,14 @@ def run_size_stage2(
     stage1_bill_save = before_total - stage1_total
 
     contracts_l2 = dict(effective_contracts)
-    contract_candidates_out: list[dict[str, Any]] = []
     selected_candidate: dict[str, Any] | None = None
+    proposed_candidate: dict[str, Any] | None = None
     reduction_info = None
     contract_disp = None
+    best_summary: dict[str, Any] | None = None
+    current_contract_bill: dict[str, int] | None = None
+    proposed_contract_bill: dict[str, int] | None = None
+    eff_fp = _contracts_fingerprint(effective_contracts)
 
     if want_contract:
         disp_l1, _, _ = _dispatch_for_point(
@@ -1340,20 +1621,21 @@ def run_size_stage2(
             target_periods=frozenset({"peak"}),
         )
         reduction_info = residual
-        candidates = hierarchical_contract_candidates(
-            contracts,
+        proposed_candidate = rule_based_contract_proposal(
+            effective_contracts,
             tou_type,
             residual=residual,
             buffer_kw=buffer_kw,
-            apply_free_boost=bool(settings.get("autoAdjustOffPeakContract")),
         )
-        best_bill = None
-        for cand in candidates:
-            c_dict = cand["contracts"]
-            summary = _simulate_point(
+        l1_summary = _summary_from_grid_row(target, disp_l1)
+        proposal_contracts = dict(proposed_candidate["contracts"])
+        if _contracts_fingerprint(proposal_contracts) == eff_fp:
+            proposal_summary = l1_summary
+        else:
+            proposal_summary = _simulate_point(
                 df,
                 plan,
-                c_dict,
+                proposal_contracts,
                 sim_settings_l1,
                 pcs_kw=pcs_kw,
                 batt_kwh=batt_kwh,
@@ -1370,68 +1652,97 @@ def run_size_stage2(
                 return_disp=True,
             )
             dispatch_count += 1
-            ok, reason = _contract_feasible(
-                summary.get("disp"),
-                c_dict,
-                tou_type,
-                buffer_kw=buffer_kw,
-            )
-            entry = {
-                **cand,
+        ok, reason = _contract_feasible(
+            proposal_summary.get("disp"),
+            proposal_contracts,
+            tou_type,
+            buffer_kw=buffer_kw,
+        )
+        proposed_candidate.update(
+            {
                 "feasible": ok,
                 "reject_reason": None if ok else reason,
-                "bill_total": int(summary["total"]) if ok else None,
+                "bill_total": int(proposal_summary["total"]),
+                "basic_total": int(proposal_summary.get("basic_total") or 0),
+                "overage_total": int(proposal_summary.get("overage_total") or 0),
+                "energy_total": int(proposal_summary.get("energy_total") or 0),
+                "feasibility": _feasibility_by_period(
+                    proposal_summary.get("disp"),
+                    proposal_contracts,
+                    tou_type,
+                    buffer_kw=buffer_kw,
+                ),
             }
-            contract_candidates_out.append(entry)
-            if not ok:
-                continue
-            total = int(summary["total"])
-            if best_bill is None or total < best_bill or (
-                total == best_bill
-                and float(cand["regular_kw"])
-                < float((selected_candidate or {}).get("regular_kw") or 1e18)
-            ):
-                best_bill = total
-                selected_candidate = entry
-                contracts_l2 = c_dict
-                contract_disp = summary.get("disp")
-
-        if selected_candidate is None:
+        )
+        current_total = int(l1_summary["total"])
+        stage1_total = current_total
+        current_contract_bill = {
+            "basic_total": int(l1_summary.get("basic_total") or 0),
+            "overage_total": int(l1_summary.get("overage_total") or 0),
+            "energy_total": int(l1_summary.get("energy_total") or 0),
+            "total": current_total,
+        }
+        proposed_contract_bill = {
+            "basic_total": int(proposal_summary.get("basic_total") or 0),
+            "overage_total": int(proposal_summary.get("overage_total") or 0),
+            "energy_total": int(proposal_summary.get("energy_total") or 0),
+            "total": int(proposal_summary["total"]),
+        }
+        adopted = int(proposal_summary["total"]) < current_total
+        proposed_candidate["adopted"] = adopted
+        proposed_candidate["bill_delta"] = int(proposal_summary["total"]) - current_total
+        if adopted:
+            contracts_l2 = proposal_contracts
+            contract_disp = proposal_summary.get("disp")
+            best_summary = proposal_summary
+            selected_candidate = proposed_candidate
+        else:
             contracts_l2 = dict(effective_contracts)
             contract_disp = disp_l1
+            best_summary = l1_summary
             selected_candidate = {
-                "id": "current",
+                "id": "baseline",
                 "contracts": contracts_l2,
                 "feasible": True,
                 "reject_reason": None,
-                "bill_total": stage1_total,
+                "bill_total": current_total,
+                "basic_total": int(l1_summary.get("basic_total") or 0),
+                "overage_total": int(l1_summary.get("overage_total") or 0),
+                "energy_total": int(l1_summary.get("energy_total") or 0),
                 "regular_kw": float(effective_cap.regular_kw),
-                "off_peak_replaced_kw": 0.0,
-                "free_off_peak_added_kw": 0.0,
+                "allowance_added_kw": 0.0,
             }
 
-    contract_summary = _simulate_point(
-        df,
-        plan,
-        contracts_l2,
-        sim_settings_l1,
-        pcs_kw=pcs_kw,
-        batt_kwh=batt_kwh,
-        tou_type=tou_type,
-        start_date=start_date,
-        end_date=end_date,
-        voltage_level=voltage_level,
-        tou_step=tou_step,
-        overage_rules=overage_rules,
-        period_schedule=schedule,
-        baseline_df=baseline_df,
-        baseline_tou=baseline_tou,
-        simulate_tou=tou_type,
-        return_disp=contract_disp is None,
-    )
-    dispatch_count += 1
-    if contract_disp is None:
-        contract_disp = contract_summary.get("disp")
+    if best_summary is not None:
+        contract_summary = best_summary
+    elif (
+        contract_disp is not None
+        and _contracts_fingerprint(contracts_l2) == eff_fp
+    ):
+        contract_summary = _summary_from_grid_row(target, contract_disp)
+    else:
+        contract_summary = _simulate_point(
+            df,
+            plan,
+            contracts_l2,
+            sim_settings_l1,
+            pcs_kw=pcs_kw,
+            batt_kwh=batt_kwh,
+            tou_type=tou_type,
+            start_date=start_date,
+            end_date=end_date,
+            voltage_level=voltage_level,
+            tou_step=tou_step,
+            overage_rules=overage_rules,
+            period_schedule=schedule,
+            baseline_df=baseline_df,
+            baseline_tou=baseline_tou,
+            simulate_tou=tou_type,
+            return_disp=contract_disp is None,
+        )
+        dispatch_count += 1
+        if contract_disp is None:
+            contract_disp = contract_summary.get("disp")
     contract_total = int(contract_summary["total"])
     contract_gain = stage1_total - contract_total
 
@@ -1534,10 +1845,17 @@ def run_size_stage2(
     proposal = {
         "contracts": {
             "original": effective_contracts,
+            "proposed": (
+                dict(proposed_candidate.get("contracts") or {})
+                if proposed_candidate
+                else None
+            ),
             "suggested": contracts_l2,
             "selected": selected_candidate,
-            "candidates": contract_candidates_out,
+            "rule": proposed_candidate,
             "reduction": reduction_info,
+            "current_bill": current_contract_bill,
+            "proposed_bill": proposed_contract_bill,
         },
         "reserve": {
             "enabled": want_reserve,
@@ -1569,7 +1887,6 @@ def run_size_stage2(
         "dispatch_charts": final_summary.get("charts"),
         "stage2_contracts": contracts_l2,
         "contract_reduction": reduction_info,
-        "contract_candidates": contract_candidates_out,
         "selected_contract": selected_candidate,
         "benefit_split": benefit_split,
         "before": before_summary,
@@ -1587,6 +1904,70 @@ def run_size_stage2(
         "feasibility": feasibility,
         **{k: final_summary[k] for k in _METRIC_KEYS if k in final_summary},
     }
+
+    # 以最後採用的 disp 物化 Final Bundle（不再另跑圖／電費）
+    final_bundle = None
+    if final_disp is not None:
+        final_bundle = materialize_final_point(
+            df,
+            plan,
+            contracts_l2,
+            (
+                sim_settings_l2
+                if want_reserve and reserve_warning is None
+                else sim_settings_l1
+            ),
+            pcs_kw=pcs_kw,
+            batt_kwh=batt_kwh,
+            tou_type=tou_type,
+            start_date=start_date,
+            end_date=end_date,
+            voltage_level=voltage_level,
+            period_schedule=schedule,
+            overage_rules=overage_rules,
+            baseline_df=baseline_df,
+            baseline_tou=baseline_tou,
+            baseline_contracts=baseline_contracts,
+            baseline_plan=baseline_plan,
+            scheme_contracts=contracts_l2,
+            disp=final_disp,
+            tou_meta=point.get("tou_meta"),
+            reserve_info={
+                "meta": reserve_meta,
+                "income": final_summary.get("reserve_income"),
+            },
+        )
+        point["dispatch_charts"] = final_bundle.get("charts")
+        point["energy_transfer"] = final_bundle.get("energy_transfer")
+        if final_bundle.get("tou_meta") is not None:
+            point["tou_meta"] = final_bundle.get("tou_meta")
+        # after 取最終工作表；before 固定 Stage1 原始帳單（不覆寫）
+        point["after"] = final_bundle.get("after") or point["after"]
+        point["before"] = before_summary
+
+    point["feature_summaries"] = _feature_summaries(
+        settings=settings,
+        functions=user_functions,
+        constraints=constraints,
+        benefit_split=benefit_split,
+        proposal=proposal,
+        reserve_meta=reserve_meta,
+        reserve_income=final_summary.get("reserve_income"),
+        contracts=contracts_l2,
+    )
+    point["benefit_report"] = _build_benefit_report(
+        before=before_summary,
+        after=point["after"],
+        energy_transfer=point.get("energy_transfer"),
+        reserve_income=final_summary.get("reserve_income"),
+        reserve_meta=reserve_meta,
+        functions=user_functions,
+        feature_summaries=point["feature_summaries"],
+        stage="full",
+        pending=False,
+        baseline_tou=baseline_tou,
+        simulate_tou=tou_type,
+    )
     stage2 = {
         "enabled": True,
         "reserve": want_reserve,
@@ -1594,6 +1975,7 @@ def run_size_stage2(
         "points": [point],
         "final": point,
         "benefit_split": benefit_split,
+        "benefit_report": point["benefit_report"],
         "proposal": proposal,
     }
 
@@ -1612,6 +1994,10 @@ def run_size_stage2(
     out["timing"] = timing
     out["evaluate_contract_reduction"] = want_contract
     out["need_full"] = False
+    out.pop("_sizing_bundle", None)
+    if final_bundle is not None:
+        out["_final_bundle"] = final_bundle
+        out["scheme_contracts"] = contracts_l2
     # 非推薦點只附 stage2，不覆寫主報告頂層（避免污染推薦口徑）
     if is_recommended:
         out.update(
@@ -1628,6 +2014,8 @@ def run_size_stage2(
                 "dispatch_charts": point.get("dispatch_charts")
                 or out.get("dispatch_charts"),
                 "benefit_split": benefit_split,
+                "benefit_report": point["benefit_report"],
+                "feature_summaries": point["feature_summaries"],
                 "final": point,
                 "proposal": proposal,
             }
@@ -1653,7 +2041,7 @@ def run_size(
     baseline_plan: dict | None = None,
     baseline_df: pd.DataFrame | None = None,
 ) -> dict[str, Any]:
-    """短名單量體 → 工程折衷三點 → 階層契約候選 → 最終備轉一次。"""
+    """短名單量體 → 工程折衷三點 → 規則式契約重配 → 最終備轉一次。"""
     stage1 = run_size_stage1(
         df,
         plan,
@@ -1687,6 +2075,243 @@ def run_size(
         overage_rules=overage_rules,
         baseline_tou_type=baseline_tou_type,
         baseline_df=baseline_df,
+        baseline_contracts=baseline_contracts,
+        baseline_plan=baseline_plan,
+    )
+
+
+def build_final_worksheet(df: pd.DataFrame, disp: pd.DataFrame) -> pd.DataFrame:
+    """標註負載＋調度列 → 最終 15 分工作表。"""
+    if disp is None or disp.empty:
+        raise ValueError("disp is empty")
+    if len(disp) != len(df):
+        raise ValueError("disp length mismatch")
+    out = df.reset_index(drop=True).copy()
+    d = disp.reset_index(drop=True)
+    out["ess_kw"] = d["ess_kw"].astype(float)
+    out["grid_kw"] = d["grid_kw"].astype(float)
+    out["soc"] = d["soc"].astype(float)
+    if "reserve_call" in d.columns:
+        out["reserve_call"] = d["reserve_call"]
+    return out
+
+
+def export_frame_from_worksheet(
+    worksheet: pd.DataFrame,
+    *,
+    baseline_df: pd.DataFrame | None = None,
+) -> pd.DataFrame:
+    """最終工作表 → 匯出欄位（不再調度）。"""
+    base = baseline_df if baseline_df is not None else worksheet
+    base = base.reset_index(drop=True)
+    ws = worksheet.reset_index(drop=True)
+    price_orig = (
+        base["energy_price"].astype(float)
+        if "energy_price" in base.columns
+        else pd.Series(0.0, index=range(len(base)))
+    )
+    price_new = (
+        ws["energy_price"].astype(float)
+        if "energy_price" in ws.columns
+        else pd.Series(0.0, index=range(len(ws)))
+    )
+    load_kw = base["kW"].astype(float)
+    ess_kw = ws["ess_kw"].astype(float)
+    grid_kw = ws["grid_kw"].astype(float)
+    soc_pct = ws["soc"].astype(float) * 100.0
+    amount_orig = _row_energy_amount(load_kw, price_orig)
+    amount_new = _row_energy_amount(grid_kw, price_new)
+    ts = ws["timestamp"] if "timestamp" in ws.columns else base["timestamp"]
+    return pd.DataFrame(
+        {
+            "時間": ts.reset_index(drop=True),
+            "原始用電": load_kw.round(4),
+            "功率": ess_kw.round(4),
+            "調整後用電": grid_kw.round(4),
+            "SOC百分比": soc_pct.round(4),
+            "原始電價": price_orig.round(4),
+            "新方案電價": price_new.round(4),
+            "原始金額": amount_orig.round(4),
+            "新金額": amount_new.round(4),
+            "差額": (amount_new - amount_orig).round(4),
+        }
+    )
+
+
+def views_from_worksheet(
+    worksheet: pd.DataFrame,
+    plan: dict,
+    scheme_contracts: dict[str, Any],
+    *,
+    pcs_kw: float,
+    batt_kwh: float,
+    tou_type: str,
+    start_date: str,
+    end_date: str,
+    voltage_level: str,
+    overage_rules: dict | None = None,
+    baseline_df: pd.DataFrame | None = None,
+    baseline_tou: str | None = None,
+    baseline_contracts: dict[str, Any] | None = None,
+    baseline_plan: dict | None = None,
+    tou_meta: dict[str, Any] | None = None,
+    reserve_meta: dict[str, Any] | None = None,
+    reserve_income: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """最終工作表 → 圖／電費／轉移／匯出（不調度）。"""
+    disp_view = pd.DataFrame(
+        {
+            "ess_kw": worksheet["ess_kw"].astype(float),
+            "soc": worksheet["soc"].astype(float),
+            "grid_kw": worksheet["grid_kw"].astype(float),
+        }
+    )
+    charts = build_dispatch_charts(worksheet, disp_view)
+    charts["pcs_kw"] = float(pcs_kw)
+    charts["batt_kwh"] = float(batt_kwh)
+
+    scheme_df = worksheet.assign(kW=worksheet["grid_kw"].to_numpy())
+    scheme = calc_full_bill(
+        scheme_df,
+        plan,
+        scheme_contracts,
+        tou_type=tou_type,
+        start_date=start_date,
+        end_date=end_date,
+        voltage_level=voltage_level,
+        overage_rules=overage_rules,
+    )
+
+    base = baseline_df if baseline_df is not None else worksheet
+    base_plan = baseline_plan or plan
+    base_tou = baseline_tou or tou_type
+    # before 必須用原始契約；未傳時等同 scheme（無降約）
+    base_contracts = (
+        baseline_contracts if baseline_contracts is not None else scheme_contracts
+    )
+    baseline = calc_full_bill(
+        base,
+        base_plan,
+        base_contracts,
+        tou_type=base_tou,
+        start_date=start_date,
+        end_date=end_date,
+        voltage_level=voltage_level,
+        overage_rules=overage_rules,
+    )
+
+    xfer = energy_transfer_payload(
+        base,
+        scheme_df,
+        baseline_tou=base_tou,
+        simulate_tou=tou_type,
+    )
+    # 金額分項：對齊 calc_full_bill summary.energy（月入帳後加總）
+    before_amt = {
+        (str(r.get("season") or ""), str(r["period"])): int(r.get("amount") or 0)
+        for r in (baseline.get("summary") or {}).get("energy") or []
+    }
+    after_amt = {
+        (str(r.get("season") or ""), str(r["period"])): int(r.get("amount") or 0)
+        for r in (scheme.get("summary") or {}).get("energy") or []
+    }
+    for row in xfer.get("rows") or []:
+        key = (str(row.get("season") or ""), str(row.get("period") or ""))
+        b_amt = before_amt.get(key, 0)
+        a_amt = after_amt.get(key, 0)
+        row["before_amount"] = b_amt
+        row["after_amount"] = a_amt
+        row["delta_amount"] = a_amt - b_amt
+    xfer["energy_total_delta"] = int(scheme["energy_total"]) - int(baseline["energy_total"])
+
+    income = reserve_income or {
+        "capacity": 0,
+        "performance": 0,
+        "activation_energy": 0,
+        "total": 0,
+        "monthly": {},
+        "events": [],
+        "data_note": "15min_estimate",
+    }
+    return {
+        "key": _dispatch_chart_key(pcs_kw, batt_kwh),
+        "pcs_kw": float(pcs_kw),
+        "batt_kwh": float(batt_kwh),
+        "worksheet": worksheet,
+        "charts": charts,
+        "tou_meta": tou_meta,
+        "reserve_meta": reserve_meta,
+        "reserve_income": income,
+        "energy_transfer": xfer,
+        "before": _bill_totals(baseline),
+        "after": _bill_totals(scheme),
+        "baseline": baseline,
+        "scheme": scheme,
+        "scheme_contracts": scheme_contracts,
+        "export_frame": export_frame_from_worksheet(worksheet, baseline_df=base),
+    }
+
+
+def materialize_final_point(
+    df: pd.DataFrame,
+    plan: dict,
+    contracts: dict[str, Any],
+    settings: dict[str, Any],
+    *,
+    pcs_kw: float,
+    batt_kwh: float,
+    tou_type: str,
+    start_date: str,
+    end_date: str,
+    voltage_level: str,
+    period_schedule: dict | None = None,
+    overage_rules: dict | None = None,
+    baseline_df: pd.DataFrame | None = None,
+    baseline_tou: str | None = None,
+    baseline_contracts: dict[str, Any] | None = None,
+    baseline_plan: dict | None = None,
+    scheme_contracts: dict[str, Any] | None = None,
+    disp: pd.DataFrame | None = None,
+    tou_meta: dict[str, Any] | None = None,
+    reserve_info: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """選定配置物化：有 disp 直接組表，否則調度一次。"""
+    scheme_c = scheme_contracts if scheme_contracts is not None else contracts
+    sim_settings = {**settings, "functions": settings.get("functions") or ["tou"]}
+    if disp is None:
+        effective_contracts = prepare_effective_contracts(scheme_c, tou_type)
+        tou_step = int(plan.get("tou_slot_minutes") or 60)
+        disp, reserve_info, tou_meta = _dispatch_for_point(
+            df,
+            plan,
+            effective_contracts,
+            sim_settings,
+            pcs_kw=pcs_kw,
+            batt_kwh=batt_kwh,
+            tou_type=tou_type,
+            tou_step=tou_step,
+            period_schedule=period_schedule,
+        )
+        scheme_c = effective_contracts
+    worksheet = build_final_worksheet(df, disp)
+    return views_from_worksheet(
+        worksheet,
+        plan,
+        scheme_c,
+        pcs_kw=pcs_kw,
+        batt_kwh=batt_kwh,
+        tou_type=tou_type,
+        start_date=start_date,
+        end_date=end_date,
+        voltage_level=voltage_level,
+        overage_rules=overage_rules,
+        baseline_df=baseline_df,
+        baseline_tou=baseline_tou,
+        baseline_contracts=baseline_contracts,
+        baseline_plan=baseline_plan,
+        tou_meta=tou_meta,
+        reserve_meta=(reserve_info or {}).get("meta") if reserve_info else None,
+        reserve_income=(reserve_info or {}).get("income") if reserve_info else None,
     )
 
 
@@ -1702,64 +2327,50 @@ def run_dispatch_charts(
     period_schedule: dict | None = None,
     baseline_df: pd.DataFrame | None = None,
     baseline_tou: str | None = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
+    voltage_level: str = "HV",
+    overage_rules: dict | None = None,
+    worksheet: pd.DataFrame | None = None,
+    scheme_contracts: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """單一 (pcs,batt) 調度圖（按需載入）。"""
-    sim_settings = {**settings, "functions": settings.get("functions") or ["tou"]}
-    effective_contracts, _ = prepare_effective_contracts(
-        df, contracts, sim_settings, tou_type
-    )
-    tou_step = int(plan.get("tou_slot_minutes") or 60)
-    disp, _reserve_info, _tou_meta = _dispatch_for_point(
-        df,
-        plan,
-        effective_contracts,
-        sim_settings,
-        pcs_kw=pcs_kw,
-        batt_kwh=batt_kwh,
-        tou_type=tou_type,
-        tou_step=tou_step,
-        period_schedule=period_schedule,
-    )
-    charts = build_dispatch_charts(df, disp)
-    charts["pcs_kw"] = float(pcs_kw)
-    charts["batt_kwh"] = float(batt_kwh)
-    bill_df = df.copy()
-    bill_df["kW"] = disp["grid_kw"]
-    load_before = baseline_df if baseline_df is not None else df
-    return {
-        "key": _dispatch_chart_key(pcs_kw, batt_kwh),
-        "pcs_kw": float(pcs_kw),
-        "batt_kwh": float(batt_kwh),
-        "charts": charts,
-        "tou_meta": _tou_meta,
-        "reserve_meta": (_reserve_info or {}).get("meta") if _reserve_info else None,
-        "energy_transfer": energy_transfer_payload(
-            load_before,
-            bill_df,
-            baseline_tou=baseline_tou or tou_type,
-            simulate_tou=tou_type,
-        ),
-    }
-
-
-def _row_energy_amount(kw: pd.Series, price: pd.Series) -> pd.Series:
-    """15 分列流動金額：kW × 0.25h × 電價。"""
-    return kw.astype(float) * hours_per_data_row() * price.astype(float)
-
-
-def _export_dispatch(
-    df: pd.DataFrame,
-    plan: dict,
-    contracts: dict[str, Any],
-    settings: dict[str, Any],
-    *,
-    pcs_kw: float,
-    batt_kwh: float,
-    tou_type: str,
-    period_schedule: dict | None,
-) -> pd.DataFrame:
-    """單一情境 dispatch（含有效契約）。"""
-    disp, _reserve_info, _tou_meta = _export_dispatch_full(
+    """單一 (pcs,batt) 調度圖；有工作表則不再調度。"""
+    if worksheet is not None:
+        bundle = views_from_worksheet(
+            worksheet,
+            plan,
+            scheme_contracts or contracts,
+            pcs_kw=pcs_kw,
+            batt_kwh=batt_kwh,
+            tou_type=tou_type,
+            start_date=start_date or "",
+            end_date=end_date or "",
+            voltage_level=voltage_level,
+            overage_rules=overage_rules,
+            baseline_df=baseline_df,
+            baseline_tou=baseline_tou,
+        )
+        return {
+            "key": bundle["key"],
+            "pcs_kw": bundle["pcs_kw"],
+            "batt_kwh": bundle["batt_kwh"],
+            "charts": bundle["charts"],
+            "tou_meta": bundle.get("tou_meta"),
+            "reserve_meta": bundle.get("reserve_meta"),
+            "energy_transfer": bundle.get("energy_transfer"),
+        }
+    sd = str(start_date or (df["date"].min() if "date" in df.columns else ""))
+    ed = str(end_date or (df["date"].max() if "date" in df.columns else ""))
+    if hasattr(sd, "isoformat"):
+        sd = sd.isoformat()  # type: ignore[union-attr]
+    if hasattr(ed, "isoformat"):
+        ed = ed.isoformat()  # type: ignore[union-attr]
+    # date may be python date
+    if not isinstance(sd, str):
+        sd = str(sd)
+    if not isinstance(ed, str):
+        ed = str(ed)
+    bundle = materialize_final_point(
         df,
         plan,
         contracts,
@@ -1767,9 +2378,30 @@ def _export_dispatch(
         pcs_kw=pcs_kw,
         batt_kwh=batt_kwh,
         tou_type=tou_type,
+        start_date=sd,
+        end_date=ed,
+        voltage_level=voltage_level,
         period_schedule=period_schedule,
+        overage_rules=overage_rules,
+        baseline_df=baseline_df,
+        baseline_tou=baseline_tou,
+        scheme_contracts=scheme_contracts,
     )
-    return disp
+    return {
+        "key": bundle["key"],
+        "pcs_kw": bundle["pcs_kw"],
+        "batt_kwh": bundle["batt_kwh"],
+        "charts": bundle["charts"],
+        "tou_meta": bundle.get("tou_meta"),
+        "reserve_meta": bundle.get("reserve_meta"),
+        "energy_transfer": bundle.get("energy_transfer"),
+        "_bundle": bundle,
+    }
+
+
+def _row_energy_amount(kw: pd.Series, price: pd.Series) -> pd.Series:
+    """15 分列流動金額：kW × 0.25h × 電價。"""
+    return kw.astype(float) * hours_per_data_row() * price.astype(float)
 
 
 def _export_dispatch_full(
@@ -1785,9 +2417,7 @@ def _export_dispatch_full(
 ) -> tuple[pd.DataFrame, dict[str, Any] | None, dict[str, Any] | None]:
     """單一情境 dispatch；回傳 (disp, reserve_info, tou_meta)。"""
     sim_settings = {**settings, "functions": settings.get("functions") or ["tou"]}
-    effective_contracts, _ = prepare_effective_contracts(
-        df, contracts, sim_settings, tou_type
-    )
+    effective_contracts = prepare_effective_contracts(contracts, tou_type)
     tou_step = int(plan.get("tou_slot_minutes") or 60)
     return _dispatch_for_point(
         df,
@@ -1820,62 +2450,74 @@ def run_compare_bills(
     baseline_tou: str | None = None,
     baseline_plan: dict | None = None,
     scheme_contracts: dict[str, Any] | None = None,
+    worksheet: pd.DataFrame | None = None,
 ) -> dict[str, Any]:
     """完整電費比對：原始 load vs 新方案 grid（含 months／summary）。"""
+    scheme_c = scheme_contracts if scheme_contracts is not None else contracts
+    if worksheet is not None:
+        bundle = views_from_worksheet(
+            worksheet,
+            plan,
+            scheme_c,
+            pcs_kw=pcs_kw,
+            batt_kwh=batt_kwh,
+            tou_type=tou_type,
+            start_date=start_date,
+            end_date=end_date,
+            voltage_level=voltage_level,
+            overage_rules=settings.get("overageRules")
+            if isinstance(settings.get("overageRules"), dict)
+            else None,
+            baseline_df=baseline_df,
+            baseline_tou=baseline_tou,
+            baseline_contracts=baseline_contracts,
+            baseline_plan=baseline_plan,
+        )
+        return {
+            "baseline": bundle["baseline"],
+            "scheme": bundle["scheme"],
+            "reserve_income": bundle.get("reserve_income"),
+            "meta": {
+                "pcs_kw": pcs_kw,
+                "batt_kwh": batt_kwh,
+                "baseline_tou": baseline_tou or tou_type,
+                "simulate_tou": tou_type,
+                "baseline_contracts": baseline_contracts or contracts,
+                "scheme_contracts": scheme_c,
+            },
+        }
+
     base = baseline_df if baseline_df is not None else df
     base_plan = baseline_plan or plan
     base_tou = baseline_tou or tou_type
     base_contracts = baseline_contracts or contracts
-    scheme_c = scheme_contracts if scheme_contracts is not None else contracts
     overage_rules = settings.get("overageRules")
     rules = overage_rules if isinstance(overage_rules, dict) else None
 
-    baseline = calc_full_bill(
-        base,
-        base_plan,
-        base_contracts,
-        tou_type=base_tou,
-        start_date=start_date,
-        end_date=end_date,
-        voltage_level=voltage_level,
-        overage_rules=rules,
-    )
-
     full_fns = list(settings.get("functions") or ["tou"])
-    disp, reserve_info, _tou_meta = _export_dispatch_full(
+    bundle = materialize_final_point(
         df,
         plan,
-        scheme_c,
+        contracts,
         {**settings, "functions": full_fns},
         pcs_kw=pcs_kw,
         batt_kwh=batt_kwh,
         tou_type=tou_type,
-        period_schedule=period_schedule,
-    )
-    scheme_df = df.assign(kW=disp["grid_kw"].to_numpy())
-    scheme = calc_full_bill(
-        scheme_df,
-        plan,
-        scheme_c,
-        tou_type=tou_type,
         start_date=start_date,
         end_date=end_date,
         voltage_level=voltage_level,
+        period_schedule=period_schedule,
         overage_rules=rules,
+        baseline_df=base,
+        baseline_tou=base_tou,
+        baseline_contracts=base_contracts,
+        baseline_plan=base_plan,
+        scheme_contracts=scheme_c,
     )
-    reserve_income = (reserve_info or {}).get("income") or {
-        "capacity": 0,
-        "performance": 0,
-        "activation_energy": 0,
-        "total": 0,
-        "monthly": {},
-        "events": [],
-        "data_note": "15min_estimate",
-    }
     return {
-        "baseline": baseline,
-        "scheme": scheme,
-        "reserve_income": reserve_income,
+        "baseline": bundle["baseline"],
+        "scheme": bundle["scheme"],
+        "reserve_income": bundle.get("reserve_income"),
         "meta": {
             "pcs_kw": pcs_kw,
             "batt_kwh": batt_kwh,
@@ -1884,6 +2526,7 @@ def run_compare_bills(
             "baseline_contracts": base_contracts,
             "scheme_contracts": scheme_c,
         },
+        "_bundle": bundle,
     }
 
 
@@ -1899,12 +2542,15 @@ def build_export_frame(
     period_schedule: dict | None = None,
     baseline_df: pd.DataFrame | None = None,
     scheme_contracts: dict[str, Any] | None = None,
+    worksheet: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
     """匯出表：時間／用電／功率／電價／金額（小數 4 位）。"""
+    if worksheet is not None:
+        return export_frame_from_worksheet(worksheet, baseline_df=baseline_df)
     base = baseline_df if baseline_df is not None else df
     scheme_c = scheme_contracts if scheme_contracts is not None else contracts
     full_fns = list(settings.get("functions") or ["tou"])
-    disp = _export_dispatch(
+    disp, _reserve_info, _tou_meta = _export_dispatch_full(
         df,
         plan,
         scheme_c,
@@ -1914,39 +2560,8 @@ def build_export_frame(
         tou_type=tou_type,
         period_schedule=period_schedule,
     )
-
-    price_orig = (
-        base["energy_price"].astype(float).reset_index(drop=True)
-        if "energy_price" in base.columns
-        else pd.Series(0.0, index=range(len(base)))
-    )
-    price_new = (
-        df["energy_price"].astype(float).reset_index(drop=True)
-        if "energy_price" in df.columns
-        else pd.Series(0.0, index=range(len(df)))
-    )
-    load_kw = base["kW"].astype(float).reset_index(drop=True)
-    ess_kw = disp["ess_kw"].astype(float).reset_index(drop=True)
-    grid_kw = disp["grid_kw"].astype(float).reset_index(drop=True)
-    soc_pct = (disp["soc"].astype(float).reset_index(drop=True) * 100.0)
-    amount_orig = _row_energy_amount(load_kw, price_orig)
-    amount_new = _row_energy_amount(grid_kw, price_new)
-    delta = amount_new - amount_orig
-
-    return pd.DataFrame(
-        {
-            "時間": disp["timestamp"].reset_index(drop=True),
-            "原始用電": load_kw.round(4),
-            "功率": ess_kw.round(4),
-            "調整後用電": grid_kw.round(4),
-            "SOC百分比": soc_pct.round(4),
-            "原始電價": price_orig.round(4),
-            "新方案電價": price_new.round(4),
-            "原始金額": amount_orig.round(4),
-            "新金額": amount_new.round(4),
-            "差額": delta.round(4),
-        }
-    )
+    ws = build_final_worksheet(df, disp)
+    return export_frame_from_worksheet(ws, baseline_df=base)
 
 
 def run_export_xlsx(
@@ -1967,9 +2582,9 @@ def run_export_xlsx(
     start_date: str | None = None,
     end_date: str | None = None,
     voltage_level: str = "HV",
+    worksheet: pd.DataFrame | None = None,
 ) -> bytes:
     """15 分用電／金額對照 → xlsx bytes。"""
-    # baseline_*／日期僅保留 API 相容；本表用 baseline_df 電價與 load
     _ = (baseline_contracts, baseline_tou, baseline_plan, start_date, end_date, voltage_level)
     table = build_export_frame(
         df,
@@ -1982,6 +2597,7 @@ def run_export_xlsx(
         period_schedule=period_schedule,
         baseline_df=baseline_df,
         scheme_contracts=scheme_contracts,
+        worksheet=worksheet,
     )
     buf = BytesIO()
     table.to_excel(buf, index=False, engine="openpyxl")

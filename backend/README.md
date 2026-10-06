@@ -10,19 +10,23 @@ uvicorn app.main:app --reload --app-dir .
 ## 正式 API
 
 
-| Method | Path                        | 說明                                    |
-| ------ | --------------------------- | ------------------------------------- |
-| GET    | `/api/settings/defaults`    | 電價／時段／假日／超約／模擬參數／TOU 策略預設         |
-| GET    | `/api/settings/contracts`   | 各方案契約欄位（fields / tier2 / forbidden）   |
-| POST   | `/api/settings/plan`        | 預覽 demand / prices / matrix（可帶覆寫，不寫檔） |
-| POST   | `/api/cleaning/filter-date` | 上傳檔 → format + 日期範圍                   |
-| GET    | `/api/import/samples`       | 匯入頁示範檔名列表 |
-| GET    | `/api/import/samples/{name}` | 下載示範檔 |
-| POST   | `/api/import`               | 上傳 → 清一次 → 暫存 → `import_id`           |
-| DELETE | `/api/import/{import_id}`   | 刪除行程內暫存（不存在也 ok）                 |
-| POST   | `/api/billing/basic`        | `import_id` + 契約 → basic + overage + energy |
-| POST   | `/api/simulate/size`        | `import_id` + 契約 + simulate → 完整試算報告 |
-| POST   | `/api/charts`               | `import_id` → heatmap / boxplot / line |
+| Method | Path                         | 說明                                          |
+| ------ | ---------------------------- | ------------------------------------------- |
+| GET    | `/api/settings/defaults`     | 電價／時段／假日／超約／模擬參數／TOU 策略預設                   |
+| GET    | `/api/settings/contracts`    | 各方案契約欄位（fields / tier2 / forbidden）         |
+| POST   | `/api/settings/plan`         | 預覽 demand / prices / matrix（可帶覆寫，不寫檔）       |
+| POST   | `/api/cleaning/filter-date`  | 上傳檔 → format + 日期範圍                         |
+| GET    | `/api/import/samples`        | 匯入頁示範檔名列表                                   |
+| GET    | `/api/import/samples/{name}` | 下載示範檔                                       |
+| POST   | `/api/import`                | 上傳 → 清一次 → 暫存 → `import_id`                 |
+| DELETE | `/api/import/{import_id}`    | 刪除行程內暫存（不存在也 ok）                            |
+| POST   | `/api/billing/basic`         | `import_id` + 契約 → basic + overage + energy |
+| POST   | `/api/simulate/size`         | Stage1：量體＋電價調度（可回 `need_full`）              |
+| POST   | `/api/simulate/full`         | Stage2：契約／備轉（綁定 `stage1_key`＋目標量體）         |
+| POST   | `/api/charts`                | `import_id` → heatmap（每天 × 96 格）          |
+
+
+
 
 ## 自檢
 
@@ -67,7 +71,7 @@ JSON（`app/data/`）= 系統預設（含 `simulate_defaults.json`）；試算�
 app/api/cleaning.py            # 清理 API
 app/api/imports.py             # 匯入、示範檔、暫存
 app/api/simulate.py            # POST /sample、/size 量體試算
-app/api/charts.py              # POST /（heatmap + boxplot + line）
+app/api/charts.py              # POST /（heatmap，每天 × 96 格）
 app/api/settings.py            # 設定 API
 app/services/import_store.py   # 匯入序列 dict（TTL、非帳號資料）
 app/services/charts.py         # 需量圖、調度圖聚合

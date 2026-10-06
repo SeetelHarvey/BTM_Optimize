@@ -1,4 +1,7 @@
-"""編排：硬 bounds（含併網上限）→ 軟意圖 merge → device.apply。"""
+"""編排：各功能獨立算限制／意圖 → 中央仲裁 → device.apply。
+
+優先序：PCS／SOC → 備援／備轉 → 防逆送／契約邊界 → 防超約 → TOU → HOLD。
+"""
 
 from typing import Any
 import pandas as pd
@@ -6,7 +9,6 @@ import pandas as pd
 from app.services.bess.device import Device, grid_kw
 from app.services.contracts import ContractCapacity
 from app.services.features import backup, demand, reserve, tou
-from app.services import settings as settings_svc
 
 # ponytail: large_user 義務時段／履約公式未定，暫不進實作集合，勾選只標 skipped
 IMPLEMENTED_FUNCTIONS = frozenset(
@@ -24,15 +26,20 @@ def skipped_functions(functions: list[str] | None) -> list[str]:
     return sorted(f for f in fns if f not in IMPLEMENTED_FUNCTIONS)
 
 
-def _merge_soft(
+def _arbitrate(
+    *,
+    lo: float,
+    hi: float,
     tou_desired: float,
     demand_desired: float,
     needs_shave: bool,
 ) -> float:
-    """削峰優先，否則 TOU 意圖。"""
-    if needs_shave:
-        return demand_desired
-    return tou_desired
+    """中央仲裁：防超約優先；否則 TOU；最後夾入硬邊界。"""
+    desired = demand_desired if needs_shave else tou_desired
+    if lo > hi:
+        # 不可行：偏閒置
+        return hi if abs(hi) <= abs(lo) else lo
+    return max(lo, min(hi, desired))
 
 
 def run(
@@ -58,14 +65,27 @@ def run(
     use_reserve = "reserve" in functions and bid_series is not None
 
     buffer_kw = float(settings.get("demandBufferKw") or 0)
+    # 防超約：參數 buffer；契約容量功能也可啟用上限（第1層壓尖峰供第2層降容）
     use_demand = "demand" in functions or buffer_kw > 0
-    tou_mode = str(settings.get("touScheduleMode") or "auto")
-    tou_schedule = settings.get("touSchedule")
-    sched = period_schedule if period_schedule is not None else settings_svc.default_schedule()
 
     dev = device
     if use_backup:
         dev = backup.adjusted_device(device, float(settings.get("backupReserveKwh") or 0))
+
+    # 唯一 schedule：呼叫端可先 resolve；缺則此處補（保持 run 可單獨測）
+    tou_schedule = settings.get("touSchedule")
+    if not isinstance(tou_schedule, dict) or not tou_schedule:
+        resolved, _meta = tou.resolve_tou_schedule(
+            settings,
+            tou_type=tou_type,
+            prices=prices,
+            period_schedule=period_schedule,
+            tou_step_minutes=tou_step_minutes,
+            soc_min=float(dev.soc_min),
+            soc_max=float(dev.soc_max),
+            charge_eff=float(dev.charge_eff),
+        )
+        tou_schedule = resolved.get("touSchedule")
 
     soc = dev.initial_soc()
     ess_out: list[float] = []
@@ -92,13 +112,10 @@ def run(
         else [False] * n
     )
     mins = df["min"].tolist() if "min" in df.columns else [None] * n
-    hours = df["hour"].tolist() if "hour" in df.columns else [None] * n
-    prices_col = (
-        df["energy_price"].tolist() if "energy_price" in df.columns else [None] * n
-    )
 
     for i in range(n):
         load = float(loads[i])
+        # 1) PCS／SOC／防逆送
         lo, hi = dev.bounds(soc, load)
         period = periods[i]
         season = seasons[i]
@@ -106,13 +123,8 @@ def run(
         ts = timestamps[i]
         is_hol = bool(holidays[i])
         data_min = int(mins[i]) if mins[i] is not None and pd.notna(mins[i]) else None
-        hour_v = float(hours[i]) if hours[i] is not None and pd.notna(hours[i]) else None
-        energy_price = (
-            float(prices_col[i])
-            if prices_col[i] is not None and pd.notna(prices_col[i])
-            else None
-        )
 
+        # 2) 備轉硬佔用／待命 SOC
         if use_reserve and bid_series is not None:
             bid_mw = float(bid_series.iloc[i])
             lo, hi = reserve.hard_occupy(lo, hi, bid_mw, dev.pcs_kw)
@@ -124,7 +136,7 @@ def run(
                 device=dev,
             )
 
-        cap_kw = None
+        # 3) 契約電網上限（防超約硬邊界）
         if use_demand:
             month = _month_key(date_val)
             cap_kw = demand.cap_kw_for_row(
@@ -137,29 +149,22 @@ def run(
             if cap_kw is not None:
                 lo, hi = demand.narrow_grid_cap(lo, hi, load_kw=load, cap_kw=cap_kw)
 
+        # 4–5) 軟意圖：防超約／TOU
         tou_out = tou.intent(
             soc=soc,
             e_nom_kwh=dev.e_nom,
             charge_eff=dev.charge_eff,
-            mode=tou_mode,
-            period=period,
             season=season,
             date=date_val,
             timestamp=ts,
             is_holiday=is_hol,
             step_minutes=tou_step_minutes,
             data_min=data_min,
-            hour=hour_v,
             tou_schedule=tou_schedule,
-            prices=prices,
-            energy_price=energy_price,
-            period_schedule=sched,
-            tou_type=tou_type,
         )
         tou_desired = float(tou_out["desired_ess_kw"])
         needs_shave = False
         demand_desired = 0.0
-
         if use_demand:
             month = _month_key(date_val)
             d_out = demand.intent(
@@ -173,8 +178,13 @@ def run(
             needs_shave = bool(d_out["needs_shave"])
             demand_desired = float(d_out["desired_ess_kw"])
 
-        desired = _merge_soft(tou_desired, demand_desired, needs_shave)
-        desired = max(lo, min(hi, desired))
+        desired = _arbitrate(
+            lo=lo,
+            hi=hi,
+            tou_desired=tou_desired,
+            demand_desired=demand_desired,
+            needs_shave=needs_shave,
+        )
         ess, soc = dev.apply(desired, soc, load)
         ess_out.append(ess)
         grid_out.append(grid_kw(load, ess))

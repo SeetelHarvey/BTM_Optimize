@@ -5,14 +5,22 @@ from app.services.schedule import hours_per_data_row
 
 
 def _clamp(x: float, lo: float, hi: float) -> float:
+    """夾到 [lo, hi]；區間空集合時取較接近 0 的端點（優先閒置）。"""
     if lo > hi:
-        return (lo + hi) / 2.0
+        return hi if abs(hi) <= abs(lo) else lo
     return max(lo, min(hi, x))
 
 
 @dataclass(frozen=True)
 class Device:
-    """PCS＋Battery 物理可行性。"""
+    """PCS＋Battery 物理可行性。
+
+    優先序（硬限制，由外而內收斂）：
+    1. PCS 額定、SOC 窗可充／可放空間（物理）
+    2. 防逆送：限制放電下限使 grid >= anti_export；load 已低於門檻時不強制充電
+    3. 防超約（dispatch.narrow_grid_cap）：只收 ess 上限，load 超 cap 時逼出放電意圖
+    SOC／PCS 與超約／逆送衝突時，以物理可行為準（不可行則偏閒置）。
+    """
 
     pcs_kw: float
     batt_kwh: float
@@ -55,10 +63,10 @@ class Device:
         room_dn = max(0.0, soc - self.soc_min)
         discharge_cap = (room_dn * e_nom * eta) / dt
 
-        # 不逆送：load + ess >= anti_export → ess >= anti_export - load
-        ess_floor = self.anti_export_kw - float(load_kw)
-
-        lo = max(-pcs, -discharge_cap, ess_floor)
+        # 防逆送：grid = load + ess >= anti_export → ess >= anti − load
+        # 但 load 已低於門檻時不強迫充電（只擋住會再往下打穿的放電）
+        ess_floor = float(self.anti_export_kw) - float(load_kw)
+        lo = max(-pcs, -discharge_cap, min(0.0, ess_floor))
         hi = min(pcs, charge_cap)
         return lo, hi
 

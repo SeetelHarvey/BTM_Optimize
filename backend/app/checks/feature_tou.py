@@ -1,4 +1,4 @@
-"""TOU 功能：效率門檻 + look-ahead／manual 矩陣 → 意圖功率。"""
+"""TOU：唯一 schedule 解析；Auto／Manual 共用執行器。"""
 
 import pandas as pd
 
@@ -8,119 +8,88 @@ from app.services.tariff import select_plan
 from app.services import settings as settings_svc
 
 
+def _slot_intent(sched, *, season, date, ts, data_min, soc, e_nom, eta):
+    return tou.intent(
+        soc=soc,
+        e_nom_kwh=e_nom,
+        charge_eff=eta,
+        season=season,
+        date=date,
+        timestamp=ts,
+        data_min=data_min,
+        step_minutes=60,
+        tou_schedule=sched,
+    )
+
+
 def main() -> None:
     plan = select_plan("HV", "ThreeStage")
     prices = plan["prices"]
     eta = 0.85
     sch = settings_svc.default_schedule()
+    soc_min, soc_max = 0.1, 0.9
+    lo_pct, hi_pct = 0, 100
 
     assert tou.worth_arbitrage(9.39, 5.85, eta)
     assert not tou.worth_arbitrage(2.6, 2.53, eta)
 
-    assert tou.auto_target_soc(season="summer", period="peak", prices=prices, charge_eff=eta) == 0.0
-    assert tou.auto_target_soc(season="summer", period="off_peak", prices=prices, charge_eff=eta) == 1.0
-    # 中價無下一時段 → 維持
-    assert tou.auto_target_soc(season="summer", period="half_peak", prices=prices, charge_eff=eta) is None
-    # 尖峰前半尖峰：下一時段更貴且過門檻 → 充
-    assert (
-        tou.auto_target_soc(
-            season="summer",
-            period="half_peak",
-            prices=prices,
-            charge_eff=eta,
-            next_period_name="peak",
-        )
-        == 1.0
+    auto = tou.build_auto_tou_schedule(
+        tou_type="ThreeStage",
+        prices=prices,
+        period_schedule=sch,
+        step_minutes=60,
+        charge_eff=eta,
+        soc_min=soc_min,
+        soc_max=soc_max,
     )
-    # 尖峰後半尖峰／週六：下一為更便宜離峰 → 維持
-    assert (
-        tou.auto_target_soc(
-            season="summer",
-            period="half_peak",
-            prices=prices,
-            charge_eff=eta,
-            next_period_name="off_peak",
-        )
-        is None
-    )
-    assert (
-        tou.auto_target_soc(
-            season="summer",
-            period="saturday_half_peak",
-            prices=prices,
-            charge_eff=eta,
-            next_period_name="off_peak",
-        )
-        is None
-    )
-    # 非夏半尖峰＝當季最高 → 放電
-    assert tou.auto_target_soc(season="non_summer", period="half_peak", prices=prices, charge_eff=eta) == 0.0
-    assert tou.auto_target_soc(season="non_summer", period="off_peak", prices=prices, charge_eff=eta) == 1.0
+    # 最低價→理論 100%；最高價→理論 0%（執行端再夾有效窗）
+    assert auto["summer"]["weekday"][0] == hi_pct   # off_peak
+    assert auto["summer"]["weekday"][16] == lo_pct  # peak
+    # 中價→更高價且過 η² → 100；中價→更低價且過 η² → 0
+    assert auto["summer"]["weekday"][9] == hi_pct   # half→peak
+    assert auto["summer"]["weekday"][22] == lo_pct  # half→off_peak
+    # 週六半尖峰→離峰價差不足 → HOLD
+    assert auto["summer"]["saturday"][12] is None
+    # 非夏半尖峰＝當季最高 → 0；離峰 → 100
+    assert auto["non_summer"]["weekday"][6] == lo_pct
+    assert auto["non_summer"]["weekday"][0] == hi_pct
 
-    # 價差過薄：高低價也不循環
-    thin = {"summer": {"peak": 3.0, "off_peak": 2.9}}
-    assert tou.auto_target_soc(season="summer", period="peak", prices=thin, charge_eff=eta) is None
-    assert tou.auto_target_soc(season="summer", period="off_peak", prices=thin, charge_eff=eta) is None
+    thin = {"summer": {"peak": 3.0, "off_peak": 2.9}, "non_summer": {"peak": 3.0, "off_peak": 2.9}}
+    thin_mtx = tou.build_auto_tou_schedule(
+        tou_type="ThreeStage",
+        prices=thin,
+        period_schedule=sch,
+        step_minutes=60,
+        charge_eff=eta,
+        soc_min=soc_min,
+        soc_max=soc_max,
+    )
+    assert all(v is None for v in thin_mtx["summer"]["weekday"])
 
     assert tou.next_period(sch, "ThreeStage", season="summer", day_key="weekday", hour=10) == "peak"
     assert tou.next_period(sch, "ThreeStage", season="summer", day_key="weekday", hour=22) == "off_peak"
     assert tou.next_period(sch, "ThreeStage", season="summer", day_key="saturday", hour=12) == "off_peak"
 
-    assert tou.target_soc(mode="auto", period=None, prices=prices) is None
+    assert tou.target_soc(season=None, day_key="weekday", slot=0, tou_schedule=auto) is None
 
     sched = {
         "summer": {"weekday": [80] + [None] * 23},
         "non_summer": {"weekday": [0] * 24},
     }
-    assert (
-        tou.target_soc(
-            mode="manual",
-            period="peak",
-            season="summer",
-            day_key="weekday",
-            slot=0,
-            tou_schedule=sched,
-        )
-        == 0.8
-    )
-    # 空白格＝HOLD
-    assert (
-        tou.target_soc(
-            mode="manual",
-            period="peak",
-            season="summer",
-            day_key="weekday",
-            slot=1,
-            tou_schedule=sched,
-        )
-        is None
-    )
-    # 缺格＝HOLD
-    assert (
-        tou.target_soc(
-            mode="manual",
-            period="peak",
-            season="summer",
-            day_key="weekday",
-            slot=99,
-            tou_schedule=sched,
-        )
-        is None
-    )
+    assert tou.target_soc(season="summer", day_key="weekday", slot=0, tou_schedule=sched) == 0.8
+    assert tou.target_soc(season="summer", day_key="weekday", slot=1, tou_schedule=sched) is None
+    assert tou.target_soc(season="summer", day_key="weekday", slot=99, tou_schedule=sched) is None
 
-    e_nom, eta = 200.0, 0.85
+    e_nom = 200.0
     ess = tou.desired_ess_kw(soc=0.5, target=1.0, e_nom_kwh=e_nom, charge_eff=eta)
     assert ess > 0
     dt = hours_per_data_row()
     assert abs(ess - (0.5 * e_nom) / (dt * eta)) < 1e-9
-
-    ess_d = tou.desired_ess_kw(soc=0.5, target=0.0, e_nom_kwh=e_nom, charge_eff=eta)
-    assert ess_d < 0
+    assert tou.desired_ess_kw(soc=0.5, target=0.0, e_nom_kwh=e_nom, charge_eff=eta) < 0
 
     assert tou.slot_index(step_minutes=60, data_min=0) == 0
     assert tou.slot_index(step_minutes=60, data_min=4) == 1
 
-    # 日鍵吃區間 date，不吃 interval-end 標籤；週日末格 date=週日 → sunday
     from datetime import date as date_cls
 
     sun = date_cls(2024, 7, 7)
@@ -128,7 +97,8 @@ def main() -> None:
     assert tou.schedule_day_key(date_cls(2024, 7, 6)) == "saturday"
     assert tou.schedule_day_key(date_cls(2024, 7, 5)) == "weekday"
     assert tou.slot_index(step_minutes=60, data_min=95) == 23
-    # 物化後 weekday[23]=0、sunday[23]=100：接續離峰不得放電
+
+    # 日界：標籤跨日仍依區間 date 讀 sunday 格
     boundary_sched = {
         "summer": {
             "weekday": [100] * 22 + [0, 0],
@@ -141,237 +111,132 @@ def main() -> None:
             "sunday": [100] * 24,
         },
     }
-    keep = tou.intent(
-        soc=0.9,
-        e_nom_kwh=e_nom,
-        charge_eff=eta,
-        mode="manual",
-        period="off_peak",
+    keep = _slot_intent(
+        boundary_sched,
         season="summer",
         date=sun,
-        timestamp=pd.Timestamp("2024-07-08 00:00:00"),
+        ts=pd.Timestamp("2024-07-08 00:00:00"),
         data_min=95,
-        hour=23,
-        tou_schedule=boundary_sched,
+        soc=0.9,
+        e_nom=e_nom,
+        eta=eta,
     )
     assert keep["target_soc"] == 1.0
     assert keep["desired_ess_kw"] >= 0
-    # 僅有標籤時也須經 tpc 轉區間日（後備路徑）
     keep_ts = tou.intent(
         soc=0.9,
         e_nom_kwh=e_nom,
         charge_eff=eta,
-        mode="manual",
-        period="off_peak",
         season="summer",
         timestamp=pd.Timestamp("2024-07-08 00:00:00"),
         data_min=95,
-        hour=23,
         tou_schedule=boundary_sched,
     )
     assert keep_ts["target_soc"] == 1.0
 
-    # intent + schedule：夏平日 10 點半尖峰應充電
-    ts = pd.Timestamp("2024-07-01 10:00:00")  # 週一
-    charge = tou.intent(
-        soc=0.5,
-        e_nom_kwh=e_nom,
-        charge_eff=eta,
-        mode="auto",
-        period="half_peak",
+    # Auto 矩陣驅動意圖
+    mon = date_cls(2024, 7, 1)
+    charge = _slot_intent(
+        auto,
         season="summer",
-        timestamp=ts,
-        prices=prices,
-        period_schedule=sch,
-        tou_type="ThreeStage",
-        hour=10,
+        date=mon,
+        ts=pd.Timestamp("2024-07-01 10:00:00"),
+        data_min=40,
+        soc=0.5,
+        e_nom=e_nom,
+        eta=eta,
     )
     assert charge["desired_ess_kw"] > 0
+    assert abs(charge["target_soc"] - 1.0) < 1e-9
 
-    hold = tou.intent(
-        soc=0.5,
-        e_nom_kwh=e_nom,
-        charge_eff=eta,
-        mode="auto",
-        period="half_peak",
+    hold = _slot_intent(
+        auto,
         season="summer",
-        timestamp=pd.Timestamp("2024-07-01 22:00:00"),
-        prices=prices,
-        period_schedule=sch,
-        tou_type="ThreeStage",
-        hour=22,
+        date=date_cls(2024, 7, 6),
+        ts=pd.Timestamp("2024-07-06 12:00:00"),
+        data_min=48,
+        soc=0.5,
+        e_nom=e_nom,
+        eta=eta,
     )
     assert hold["desired_ess_kw"] == 0.0
     assert hold["target_soc"] == 0.5
 
-    sat = tou.intent(
-        soc=0.5,
-        e_nom_kwh=e_nom,
-        charge_eff=eta,
-        mode="auto",
-        period="saturday_half_peak",
-        season="summer",
-        timestamp=pd.Timestamp("2024-07-06 12:00:00"),
-        prices=prices,
-        period_schedule=sch,
-        tou_type="ThreeStage",
-        hour=12,
-    )
-    assert sat["desired_ess_kw"] == 0.0
-
-    dis = tou.intent(
-        soc=0.5,
-        e_nom_kwh=e_nom,
-        charge_eff=eta,
-        mode="auto",
-        period="half_peak",
+    dis = _slot_intent(
+        auto,
         season="non_summer",
-        prices=prices,
+        date=date_cls(2024, 1, 15),
+        ts=pd.Timestamp("2024-01-15 08:00:00"),
+        data_min=32,
+        soc=0.5,
+        e_nom=e_nom,
+        eta=eta,
     )
     assert dis["desired_ess_kw"] < 0
+    assert abs(dis["target_soc"] - 0.0) < 1e-9
 
-    # 夏半尖峰參考＋物化矩陣（平日最大尖峰 kWh → reserve SOC）
-    rows = []
-    for day in ("2024-07-01", "2024-07-02", "2024-07-03"):
-        for h in range(24):
-            for q in range(4):
-                load = 50.0 if 16 <= h < 22 else (400.0 if 9 <= h < 16 else 80.0)
-                ts = pd.Timestamp(f"{day} {h:02d}:{q * 15:02d}:00") + pd.Timedelta(minutes=15)
-                rows.append(
-                    {
-                        "timestamp": ts,
-                        "date": pd.Timestamp(day).date(),
-                        "hour": float(h),
-                        "min": h * 4 + q,
-                        "kW": load,
-                        "period": (
-                            "peak"
-                            if 16 <= h < 22
-                            else ("half_peak" if 9 <= h < 16 or h >= 22 else "off_peak")
-                        ),
-                        "season": "summer",
-                        "is_holiday": False,
-                    }
-                )
-    # 假日尖峰極大，不得拉高 max_peak
-    for h in range(24):
-        for q in range(4):
-            ts = pd.Timestamp(f"2024-07-04 {h:02d}:{q * 15:02d}:00") + pd.Timedelta(minutes=15)
-            rows.append(
-                {
-                    "timestamp": ts,
-                    "date": pd.Timestamp("2024-07-04").date(),
-                    "hour": float(h),
-                    "min": h * 4 + q,
-                    "kW": 900.0 if 16 <= h < 22 else 80.0,
-                    "period": "peak" if 16 <= h < 22 else "off_peak",
-                    "season": "summer",
-                    "is_holiday": True,
-                }
-            )
-    df = pd.DataFrame(rows)
-    ref_small_peak = tou.build_summer_halfpeak_ref(
-        df,
-        pcs_kw=500,
-        batt_kwh=1000,
-        soc_min=0.1,
-        soc_max=0.9,
-        charge_eff=eta,
-        prices=prices,
-    )
-    assert ref_small_peak["enabled"] is True
-    assert ref_small_peak["reason"] == "ok"
-    assert 0.1 < ref_small_peak["reserve_soc"] < 0.9
-    # 平日尖峰 50kW×6h＝300kWh；假日 900 不計入
-    assert abs(float(ref_small_peak["max_peak_kwh"]) - 300.0) < 1.0
-    mtx = tou.materialize_tou_schedule(
-        tou_type="ThreeStage",
-        prices=prices,
-        period_schedule=sch,
-        step_minutes=60,
-        halfpeak_ref={**ref_small_peak, "season": "summer"},
-        charge_eff=eta,
-    )
-    am = mtx["summer"]["weekday"][9:16]
-    assert all(v == int(round(ref_small_peak["reserve_soc_pct"])) for v in am)
-    assert mtx["summer"]["weekday"][16] == 0
-    assert mtx["summer"]["weekday"][22] == 0  # 下一段離峰 → 放完，非 reserve
-    assert mtx["summer"]["weekday"][0] == 100
-
-    # 尖峰可放電量吃滿可用 SOC → 不預放；晚間中價仍放完
-    rows2 = []
-    for day in ("2024-07-01", "2024-07-02"):
-        for h in range(24):
-            for q in range(4):
-                load = 800.0 if 16 <= h < 22 else 50.0
-                ts = pd.Timestamp(f"{day} {h:02d}:{q * 15:02d}:00") + pd.Timedelta(minutes=15)
-                rows2.append(
-                    {
-                        "timestamp": ts,
-                        "date": pd.Timestamp(day).date(),
-                        "hour": float(h),
-                        "min": h * 4 + q,
-                        "kW": load,
-                        "period": "peak" if 16 <= h < 22 else ("half_peak" if 9 <= h < 16 or h >= 22 else "off_peak"),
-                        "season": "summer",
-                        "is_holiday": False,
-                    }
-                )
-    ref_big = tou.build_summer_halfpeak_ref(
-        pd.DataFrame(rows2),
-        pcs_kw=500,
-        batt_kwh=200,
-        soc_min=0.1,
-        soc_max=0.9,
-        charge_eff=eta,
-        prices=prices,
-    )
-    assert ref_big["enabled"] is False
-    assert ref_big["reason"] == "peak_fills_usable"
-    mtx2 = tou.materialize_tou_schedule(
-        tou_type="ThreeStage",
-        prices=prices,
-        period_schedule=sch,
-        halfpeak_ref={**ref_big, "season": "summer"},
-        charge_eff=eta,
-    )
-    assert all(v is None for v in mtx2["summer"]["weekday"][9:16])
-    assert mtx2["summer"]["weekday"][22] == 0
-
-    # 兩段式無中價 → 不啟用預放
-    plan2 = select_plan("HV", "TwoStage")
-    ref2 = tou.build_midprice_reserve_ref(
-        df,
-        pcs_kw=500,
-        batt_kwh=1000,
-        soc_min=0.1,
-        soc_max=0.9,
-        charge_eff=eta,
-        prices=plan2["prices"],
-        season="summer",
-    )
-    assert ref2["enabled"] is False
-    assert ref2["reason"] == "no_mid_tier"
-
-    # 逐季預放：prepare_auto_tou 應帶 summer + non_summer
-    local, meta = tou.prepare_auto_tou(
-        df,
+    # Auto 產生的矩陣原樣當 Manual → 逐列意圖一致
+    local_auto, meta = tou.resolve_tou_schedule(
         {"touScheduleMode": "auto", "functions": ["tou"]},
-        pcs_kw=500,
-        batt_kwh=2000,
         tou_type="ThreeStage",
         prices=prices,
         period_schedule=sch,
         tou_step_minutes=60,
-        soc_min=0.1,
-        soc_max=0.9,
+        soc_min=soc_min,
+        soc_max=soc_max,
         charge_eff=eta,
     )
-    assert local.get("touScheduleMode") == "manual"
-    assert meta and "halfpeak_refs" in meta
-    assert "summer" in meta["halfpeak_refs"] and "non_summer" in meta["halfpeak_refs"]
+    assert meta["source"] == "auto"
+    assert local_auto["touSchedule"] == auto
+    local_man, meta_man = tou.resolve_tou_schedule(
+        {
+            "touScheduleMode": "manual",
+            "touSchedule": meta["recommended_schedule"],
+            "functions": ["tou"],
+        },
+        tou_type="ThreeStage",
+        prices=prices,
+        period_schedule=sch,
+        tou_step_minutes=60,
+        soc_min=soc_min,
+        soc_max=soc_max,
+        charge_eff=eta,
+    )
+    assert meta_man["source"] == "manual"
+    assert local_man["touSchedule"] == local_auto["touSchedule"]
 
-    print("ok", charge, hold, sat, dis, ref_small_peak["reserve_soc_pct"])
+    samples = [
+        (mon, "summer", pd.Timestamp("2024-07-01 02:00:00"), 8),
+        (mon, "summer", pd.Timestamp("2024-07-01 10:00:00"), 40),
+        (mon, "summer", pd.Timestamp("2024-07-01 17:00:00"), 68),
+        (mon, "summer", pd.Timestamp("2024-07-01 22:00:00"), 88),
+        (date_cls(2024, 7, 6), "summer", pd.Timestamp("2024-07-06 12:00:00"), 48),
+        (date_cls(2024, 1, 15), "non_summer", pd.Timestamp("2024-01-15 08:00:00"), 32),
+    ]
+    for date_v, season, ts, dmin in samples:
+        a = _slot_intent(
+            local_auto["touSchedule"],
+            season=season,
+            date=date_v,
+            ts=ts,
+            data_min=dmin,
+            soc=0.55,
+            e_nom=e_nom,
+            eta=eta,
+        )
+        b = _slot_intent(
+            local_man["touSchedule"],
+            season=season,
+            date=date_v,
+            ts=ts,
+            data_min=dmin,
+            soc=0.55,
+            e_nom=e_nom,
+            eta=eta,
+        )
+        assert a == b
+
+    print("ok", charge, hold, dis, meta["source"])
 
 
 if __name__ == "__main__":
