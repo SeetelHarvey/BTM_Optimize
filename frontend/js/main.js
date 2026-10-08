@@ -1497,7 +1497,7 @@ function buildSimulateFormData({
   return fd;
 }
 
-/** 本輪 size→full 凍結的 simulate JSON（略過 UI 欄）。 */
+/** 本輪 stage1→stage2 凍結的 simulate JSON（略過 UI 欄）。 */
 let simFrozenPayload = null;
 
 function currentSchema() {
@@ -1985,7 +1985,7 @@ let simSavingsChart = null;
 let simDispatchCharts = [];
 let simDispatchChartKey = null;
 let simViewMode = "recommended";
-/** @type {"sizing" | "full"} 配置檢視：僅儲能｜含契約與備轉 */
+/** @type {"sizing" | "stage2"} 配置檢視：僅第 1 層｜含契約與備轉 */
 let simViewContext = "sizing";
 let simDispatchChartCache = {};
 let simDispatchChartPending = {};
@@ -2000,10 +2000,10 @@ let chartsJob = 0;
 let billFetch = null;
 let billJob = 0;
 let simulateFetch = null;
-let simulateFullFetch = null;
-/** 串行 /full（點擊與背景預取共用，避免並行互蓋）。 */
-let simulateFullChain = Promise.resolve();
-let simulateFullPrefetchToken = 0;
+let simulateStage2Fetch = null;
+/** 串行 /stage2（點擊與背景預取共用，避免並行互蓋）。 */
+let simulateStage2Chain = Promise.resolve();
+let simulateStage2PrefetchToken = 0;
 let simulateSampleFetch = null;
 let simulateExportFetch = null;
 let simulateJob = 0;
@@ -4142,16 +4142,16 @@ function simRowChartKey(row) {
 /** 是否需要／已要求契約或備轉第二層。 */
 function simWantsStage2(res) {
   if (!res) return false;
-  if (res.need_full) return true;
+  if (res.need_stage2) return true;
   if (res.want_reserve || res.want_contract || res.evaluate_contract_reduction) return true;
   return (res.functions || []).includes("reserve");
 }
 
-/** 需要第二層且尚未完成（full 失敗則放行，顯示 stage1＋錯誤）。 */
+/** 需要第二層且尚未完成（stage2 失敗則放行，顯示 stage1＋錯誤）。 */
 function simStage2Pending(res) {
   if (!res || !simWantsStage2(res)) return false;
-  if (simHasFullContext(res)) return false;
-  if (session._simFullError && !simulateFullFetch) return false;
+  if (simHasStage2(res)) return false;
+  if (session._simStage2Error && !simulateStage2Fetch) return false;
   return true;
 }
 
@@ -4184,7 +4184,7 @@ function simActiveStage2(res, mode) {
   return simStage2At(res, simViewBaseRow(res, mode));
 }
 
-function simHasFullContext(res, row) {
+function simHasStage2(res, row) {
   return !!simStage2At(res, row || simViewBaseRow(res));
 }
 
@@ -4230,15 +4230,15 @@ function simMergeStage2Row(base, s2) {
 
 function simViewRow(res, mode) {
   const base = simViewBaseRow(res, mode);
-  // Final Bundle：有 Stage2 就合併；不再在 sizing/full 兩套結果間切換
+  // Final Bundle：有 stage2 就合併；圖表快取用 sizing／stage2 區分
   const s2 = simStage2At(res, base);
   if (s2) return simMergeStage2Row(base, s2);
   return base;
 }
 
-/** 目前選點的最終口徑：有 Stage2＝full，否則 sizing。 */
+/** 目前選點的最終口徑：有 stage2 用 stage2，否則 sizing。 */
 function syncSimViewContext(res, row) {
-  simViewContext = simHasFullContext(res, row || simViewBaseRow(res)) ? "full" : "sizing";
+  simViewContext = simHasStage2(res, row || simViewBaseRow(res)) ? "stage2" : "sizing";
   return simViewContext;
 }
 
@@ -4279,7 +4279,7 @@ function simViewDetailWaiting(res, row) {
   const key = simRowChartKey(row);
   if (!key) return false;
   // 需要 Stage2 但尚未完成：顯示計算中
-  if (simWantsStage2(res) && !simHasFullContext(res, row)) return true;
+  if (simWantsStage2(res) && !simHasStage2(res, row)) return true;
   if (simLookupDispatchCache(row) || simRowField(res, row, "energy_transfer")) return false;
   return true;
 }
@@ -4296,14 +4296,14 @@ function simSyncViewChartKey(res) {
   simDispatchChartKey = simChartCacheKey(row, simViewContext) || simRowChartKey(row);
 }
 
-/** 把 /full 結果併入既有 stage1；stage2 依 pcs/batt 快取。 */
-function simMergeFullResult(base, full) {
+/** 把 /stage2 結果併入既有 stage1；stage2 依 pcs/batt 快取。 */
+function simMergeStage2(base, full) {
   if (!full || typeof full !== "object") return normalizeSimulateSizeResult(base);
   const src = base && Array.isArray(base.grid) && base.grid.length ? base : full;
   const out = normalizeSimulateSizeResult({
     ...src,
     stage1_key: full.stage1_key || src.stage1_key,
-    need_full: false,
+    need_stage2: false,
     want_contract: full.want_contract ?? src.want_contract,
     want_reserve: full.want_reserve ?? src.want_reserve,
     evaluate_contract_reduction:
@@ -4631,7 +4631,7 @@ function seedSimDispatchCache(res) {
   }
   const rec = res?.recommended || res?.best_effort;
   const base = simRowChartKey(rec);
-  const sizingCharts = simHasFullContext(res, rec) ? null : res?.dispatch_charts;
+  const sizingCharts = simHasStage2(res, rec) ? null : res?.dispatch_charts;
   if (base && sizingCharts) {
     simDispatchChartCache[`${base}__sizing`] = sizingCharts;
     simDispatchChartCache[base] = sizingCharts;
@@ -4677,7 +4677,7 @@ function simDispatchChartsForKey(res, key) {
   }
   if (base && simDispatchChartCache[`${base}__full`]) return simDispatchChartCache[`${base}__full`];
   if (base && simDispatchChartCache[base]) return simDispatchChartCache[base];
-  if (simWantsStage2(res) && !simHasFullContext(res, row)) return null;
+  if (simWantsStage2(res) && !simHasStage2(res, row)) return null;
   if (base && base === simHighlightKey(res)) {
     return res?.dispatch_charts || null;
   }
@@ -4762,7 +4762,7 @@ async function fetchSimDispatchChartRow(row, T) {
       const data = await apiJson("/api/simulate/dispatch-charts", { method: "POST", body: fd });
       if (resultKey !== session.simulateResultKey) return key;
       const charts = data && data.charts;
-      const ctx = adopted ? "full" : "sizing";
+      const ctx = adopted ? "stage2" : "sizing";
       if (charts) {
         simDispatchChartCache[key] = charts;
         simDispatchChartCache[`${key}__${ctx}`] = charts;
@@ -5202,16 +5202,16 @@ async function setSimViewMode(mode, res, T) {
   refreshSimReportHead(live, T);
 }
 
-/** 若目前檢視點需要第二層且尚未快取，則請求 /full。 */
+/** 若目前檢視點需要第二層且尚未快取，則請求 /stage2。 */
 async function ensureStage2ForView(res, T) {
   if (!res || !simWantsStage2(res) || !res.stage1_key) return res;
   const base = simViewBaseRow(res);
   if (!base || simStage2At(res, base)) return res;
   try {
-    return await fetchSimulateFullForRow(res, base, T);
+    return await fetchStage2ForRow(res, base, T);
   } catch (err) {
     console.warn("sim stage2 for view", err);
-    session._simFullError = String(err.message || err);
+    session._simStage2Error = String(err.message || err);
     if (parseRoute() === ROUTES.SIMULATE) {
       refreshSimReportHead(normalizeSimulateSizeResult(session.lastSimulateSize) || res, T);
     }
@@ -5219,7 +5219,7 @@ async function ensureStage2ForView(res, T) {
   }
 }
 
-async function fetchSimulateFullForRow(stageRes, row, T, opts) {
+async function fetchStage2ForRow(stageRes, row, T, opts) {
   const quiet = !!(opts && opts.quiet);
   if (!session.importId || !stageRes || !stageRes.stage1_key || !row) {
     return stageRes;
@@ -5239,32 +5239,32 @@ async function fetchSimulateFullForRow(stageRes, row, T, opts) {
     });
     if (!fd) return live;
 
-    simulateFullFetch = apiJson("/api/simulate/full", { method: "POST", body: fd });
+    simulateStage2Fetch = apiJson("/api/simulate/stage2", { method: "POST", body: fd });
     if (!quiet && parseRoute() === ROUTES.SIMULATE && T) {
       refreshSimReportHead(live, T);
     }
     try {
-      const full = await simulateFullFetch;
-      session._simFullError = null;
-      const merged = simMergeFullResult(live, full);
+      const full = await simulateStage2Fetch;
+      session._simStage2Error = null;
+      const merged = simMergeStage2(live, full);
       if (payload) merged._simulatePayload = payload;
       session.lastSimulateSize = merged;
       persistSession();
       seedSimDispatchCache(merged);
       return merged;
     } finally {
-      simulateFullFetch = null;
+      simulateStage2Fetch = null;
     }
   };
-  const next = simulateFullChain.then(run, run);
-  simulateFullChain = next.then(() => {}, () => {});
+  const next = simulateStage2Chain.then(run, run);
+  simulateStage2Chain = next.then(() => {}, () => {});
   return next;
 }
 
-/** 推薦點 /full 後，背景串行預取另外配置的 Stage2。 */
+/** 推薦點 /stage2 後，背景串行預取另外配置的 stage2。 */
 async function prefetchStage2Siblings(res, T, jobId) {
   if (!res || !simWantsStage2(res) || !res.stage1_key) return;
-  const token = ++simulateFullPrefetchToken;
+  const token = ++simulateStage2PrefetchToken;
   const activeKey = simRowChartKey(simViewBaseRow(res));
   const pending = simUniqueViewRows(res)
     .filter((row) => !simStage2At(res, row))
@@ -5274,16 +5274,16 @@ async function prefetchStage2Siblings(res, T, jobId) {
       return aActive - bActive;
     });
   for (const row of pending) {
-    if (token !== simulateFullPrefetchToken || jobId !== simulateJob) return;
+    if (token !== simulateStage2PrefetchToken || jobId !== simulateJob) return;
     let live = normalizeSimulateSizeResult(session.lastSimulateSize) || res;
     if (simStage2At(live, row)) continue;
     try {
-      live = await fetchSimulateFullForRow(live, row, T, { quiet: true });
+      live = await fetchStage2ForRow(live, row, T, { quiet: true });
     } catch (err) {
       console.warn("sim stage2 prefetch", err);
       return;
     }
-    if (token !== simulateFullPrefetchToken || jobId !== simulateJob) return;
+    if (token !== simulateStage2PrefetchToken || jobId !== simulateJob) return;
     if (
       parseRoute() === ROUTES.SIMULATE
       && simRowChartKey(simViewBaseRow(live)) === simRowChartKey(row)
@@ -5295,18 +5295,18 @@ async function prefetchStage2Siblings(res, T, jobId) {
   }
 }
 
-async function retrySimulateFullStep() {
-  if (simulateFetch || simulateFullFetch || simulateExportFetch) return;
+async function retryStage2() {
+  if (simulateFetch || simulateStage2Fetch || simulateExportFetch) return;
   const cur = normalizeSimulateSizeResult(session.lastSimulateSize);
   if (!(cur && cur.stage1_key && simWantsStage2(cur))) return;
   const T = I18N[locale].simulate;
   const row = simViewBaseRow(cur) || cur.recommended || cur.best_effort;
   if (!row) return;
-  session._simFullError = null;
+  session._simStage2Error = null;
   try {
-    await fetchSimulateFullForRow(cur, row, T);
+    await fetchStage2ForRow(cur, row, T);
   } catch (err) {
-    session._simFullError = String(err.message || err);
+    session._simStage2Error = String(err.message || err);
     persistSession();
   }
   if (parseRoute() === ROUTES.SIMULATE) {
@@ -5325,7 +5325,7 @@ function refreshSimReportHead(res, T) {
       if (tmp.firstElementChild) {
         host.replaceWith(tmp.firstElementChild);
         document.getElementById("btnSimulateFullRetry")?.addEventListener("click", () => {
-          retrySimulateFullStep();
+          retryStage2();
         });
       }
     }
@@ -5802,9 +5802,9 @@ function isSimulateResultStale() {
 function clearSimulateResult() {
   simulateJob += 1;
   simulateSampleJob += 1;
-  simulateFullPrefetchToken += 1;
+  simulateStage2PrefetchToken += 1;
   simulateFetch = null;
-  simulateFullFetch = null;
+  simulateStage2Fetch = null;
   simulateSampleFetch = null;
   simFrozenPayload = null;
   simDispatchChartKey = null;
@@ -5861,7 +5861,7 @@ function simWizardStep() {
   if (step === 2) step = "config";
   else if (step === 3) step = "result";
   else if (!["params", "fns", "config", "result"].includes(step)) step = "fns";
-  const running = !!(simulateFetch || simulateFullFetch);
+  const running = !!(simulateFetch || simulateStage2Fetch);
   const hasResult = !!normalizeSimulateSizeResult(session.lastSimulateSize);
   if (hasResult) step = "result";
   else if (!session.importId && step !== "fns") step = "fns";
@@ -5873,7 +5873,7 @@ function simWizardStep() {
 function simResultLocksSteps() {
   return !!normalizeSimulateSizeResult(session.lastSimulateSize)
     || !!simulateFetch
-    || !!simulateFullFetch;
+    || !!simulateStage2Fetch;
 }
 
 function renderSimStepBar(T, step) {
@@ -5905,7 +5905,7 @@ function renderSimConfigNav(T) {
 function simRunLocked() {
   // 指定容量不走交叉取樣，取樣中仍可開始試算
   const sampling = session.simulate?.sizingMode !== "single" && simulateSampleFetch;
-  return !!(simulateFetch || sampling || simulateFullFetch);
+  return !!(simulateFetch || sampling || simulateStage2Fetch);
 }
 
 function renderSimParamsNav(T) {
@@ -5942,16 +5942,16 @@ function refreshSimConfigStep() {
 function paintSimSample() {
   if (parseRoute() !== ROUTES.SIMULATE) return;
   const step = session.simulate && session.simulate.wizardStep;
-  if (step === "config" && refreshSimConfigStep() && !simulateFetch && !simulateFullFetch) return;
+  if (step === "config" && refreshSimConfigStep() && !simulateFetch && !simulateStage2Fetch) return;
   renderPage({ animate: false, preserveScroll: true });
 }
 
 function renderSimRunBar(T) {
   const sizing = !!simulateFetch;
-  const fulling = !!simulateFullFetch;
+  const stage2Running = !!simulateStage2Fetch;
   const sampling = !!simulateSampleFetch;
   const exporting = !!simulateExportFetch;
-  const running = sizing || sampling || fulling;
+  const running = sizing || sampling || stage2Running;
   const busy = running || exporting;
   const res = normalizeSimulateSizeResult(session.lastSimulateSize);
   const hasResult = !!res;
@@ -5988,12 +5988,12 @@ function renderSimRunBar(T) {
 
 function renderSimReportSection(T) {
   const sizing = !!simulateFetch;
-  const fulling = !!simulateFullFetch;
+  const stage2Running = !!simulateStage2Fetch;
   const sampling = !!simulateSampleFetch;
   const res = normalizeSimulateSizeResult(session.lastSimulateSize);
   // 尚無報告時，樣本階段先不佔位；已有報告則保留（勾選／半尖峰預覽取樣不拆報告）
-  if (sampling && !sizing && !fulling && !res) return "";
-  if (!sizing && !fulling && !res) return "";
+  if (sampling && !sizing && !stage2Running && !res) return "";
+  if (!sizing && !stage2Running && !res) return "";
 
   if (sizing && !res) {
     return `<section class="btm-card hud-panel hud-frame sim-report sim-report--busy">
@@ -6631,12 +6631,12 @@ function simReportHeadHtml(T, res) {
   if (!baseRow) return "";
   syncSimViewContext(res, baseRow);
   const pending = simStage2Pending(res);
-  const evaluating = !!simulateFullFetch || pending;
+  const evaluating = !!simulateStage2Fetch || pending;
   const evalBanner = evaluating
     ? `<div class="sim-report__eval">${busyBlockHtml(T.simEvaluatingExtras)}</div>`
     : "";
-  const fullFail = !!session._simFullError;
-  const failBanner = fullFail && !simulateFullFetch
+  const stage2Fail = !!session._simStage2Error;
+  const failBanner = stage2Fail && !simulateStage2Fetch
     ? `<p class="sim-report__warn btm-meta btm-meta--err">${T.simFullFailedKeep}
         <button type="button" class="btm-btn btm-btn--ghost" id="btnSimulateFullRetry">${T.simFullRetry}</button>
       </p>`
@@ -6947,7 +6947,7 @@ function showSimStep(id) {
     id === "result"
     && !normalizeSimulateSizeResult(session.lastSimulateSize)
     && !simulateFetch
-    && !simulateFullFetch
+    && !simulateStage2Fetch
   ) return;
   session.simulate.wizardStep = id;
   persistSession();
@@ -7166,7 +7166,7 @@ function bindSimulate() {
   });
 
   async function startSimulateRun() {
-    if (simulateFetch || simulateFullFetch || simulateExportFetch) return;
+    if (simulateFetch || simulateStage2Fetch || simulateExportFetch) return;
     // 有報告時不可直接重跑；須先清除結果
     if (normalizeSimulateSizeResult(session.lastSimulateSize)) return;
     // 取消進行中的預覽取樣
@@ -7195,7 +7195,7 @@ function bindSimulate() {
       setRunMeta(meta, t("simulate.simNeedStrategy"), true);
       return;
     }
-    // 凍結本輪 simulate：size→full／view 共用同一份（略過 UI 欄）
+    // 凍結本輪 simulate：stage1→stage2／檢視共用同一份（略過 UI 欄）
     simFrozenPayload = simulateApiJson();
     const fdSize = buildSimulateFormData({ simulateJson: simFrozenPayload });
     if (!fdSize) {
@@ -7203,12 +7203,12 @@ function bindSimulate() {
       return;
     }
     const id = ++simulateJob;
-    simulateFullPrefetchToken += 1;
+    simulateStage2PrefetchToken += 1;
     session.simulateError = null;
-    session._simFullError = null;
+    session._simStage2Error = null;
     session._scrollSimReport = false;
     clearSimAuxCaches();
-    // 工作區已有完整 sample 則直接 /size（後端有 profile／size 快取）
+    // 工作區已有完整 sample 則直接 /stage1（後端有 profile／stage1 快取）
     const existing = session.lastSimulateSample;
     const hasRichSample = !!(existing && existing.profile_stats && existing.diagnosis);
     if (!singleRun && !hasRichSample) {
@@ -7284,17 +7284,17 @@ function bindSimulate() {
       persistSession();
     }
 
-    async function runFullStep(sizeRes) {
-      if (!(sizeRes && sizeRes.need_full && sizeRes.stage1_key)) return;
+    async function runStage2(sizeRes) {
+      if (!(sizeRes && sizeRes.need_stage2 && sizeRes.stage1_key)) return;
       const rec = sizeRes.recommended || sizeRes.best_effort;
       if (!rec) return;
       if (parseRoute() === ROUTES.SIMULATE) {
         renderPage({ animate: false, preserveScroll: true });
       }
       try {
-        const merged = await fetchSimulateFullForRow(sizeRes, rec, I18N[locale].simulate);
+        const merged = await fetchStage2ForRow(sizeRes, rec, I18N[locale].simulate);
         if (id !== simulateJob) return;
-        session._simFullError = null;
+        session._simStage2Error = null;
         if (simFrozenPayload && merged) merged._simulatePayload = simFrozenPayload;
         await applySizeResult(merged || sizeRes);
         const live = normalizeSimulateSizeResult(session.lastSimulateSize) || merged;
@@ -7303,7 +7303,7 @@ function bindSimulate() {
         });
       } catch (err) {
         if (id !== simulateJob) return;
-        session._simFullError = String(err.message || err);
+        session._simStage2Error = String(err.message || err);
         if (isImportExpiredError(err)) {
           redirectImportExpired();
           return;
@@ -7314,7 +7314,7 @@ function bindSimulate() {
 
     try {
       session.simulate.wizardStep = "result";
-      simulateFetch = apiJson("/api/simulate/size", { method: "POST", body: fdSize });
+      simulateFetch = apiJson("/api/simulate/stage1", { method: "POST", body: fdSize });
       renderPage({ animate: false, preserveScroll: false });
 
       const res = await simulateFetch;
@@ -7324,7 +7324,7 @@ function bindSimulate() {
       if (parseRoute() === ROUTES.SIMULATE) {
         renderPage({ animate: false, preserveScroll: !session._scrollSimReport });
       }
-      await runFullStep(res);
+      await runStage2(res);
     } catch (err) {
       if (id !== simulateJob) return;
       session.simulateError = String(err.message || err);
@@ -7349,13 +7349,13 @@ function bindSimulate() {
 
   const fullRetry = document.getElementById("btnSimulateFullRetry");
   if (fullRetry) {
-    fullRetry.onclick = () => { retrySimulateFullStep(); };
+    fullRetry.onclick = () => { retryStage2(); };
   }
 
   const clearBtn = document.getElementById("btnSimulateClear");
   if (clearBtn) {
     clearBtn.onclick = () => {
-      if (simulateFetch || simulateFullFetch || simulateSampleFetch || simulateExportFetch) return;
+      if (simulateFetch || simulateStage2Fetch || simulateSampleFetch || simulateExportFetch) return;
       session.simulate.wizardStep = "params";
       markSimSampleStale();
       clearSimulateResult();
@@ -7369,7 +7369,7 @@ function bindSimulate() {
   const exportBtn = document.getElementById("btnSimulateExport");
   if (exportBtn) {
     exportBtn.onclick = async () => {
-      if (simulateFetch || simulateFullFetch || simulateSampleFetch || simulateExportFetch) return;
+      if (simulateFetch || simulateStage2Fetch || simulateSampleFetch || simulateExportFetch) return;
       const res = normalizeSimulateSizeResult(session.lastSimulateSize);
       const row = simViewRow(res);
       if (!row || !requireLiveImportOrRedirect()) return;

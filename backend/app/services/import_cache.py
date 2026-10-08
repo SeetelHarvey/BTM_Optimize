@@ -3,7 +3,7 @@
 試算指紋契約：
 - plan／Form contracts／rates／schedule／holidays／overage＝輸入
 - simulate 只取計算欄；UI 導覽袋（wizardStep 等）一律略過
-- stage1＝量體＋電價調度；full＝綁定 stage1_key＋目標量體的契約／備轉
+- stage1＝量體＋電價調度；stage2＝綁定 stage1_key＋目標量體的契約／備轉
 """
 
 from __future__ import annotations
@@ -107,7 +107,7 @@ def stage1_fingerprint(
     )
 
 
-def full_fingerprint(
+def stage2_fingerprint(
     *,
     stage1_key: str,
     simulate: dict,
@@ -124,7 +124,7 @@ def full_fingerprint(
     if pcs_kw is not None and batt_kwh is not None:
         payload["pcs"] = round(float(pcs_kw), 3)
         payload["batt"] = round(float(batt_kwh), 3)
-    return "full:" + stable_hash(payload)
+    return "stage2:" + stable_hash(payload)
 
 
 def compare_bill_fingerprint(
@@ -264,17 +264,17 @@ def _selfcheck() -> None:
         plan_key=a, contracts={"regular_kw": 1}, simulate=ui_b, overage_rules=None
     )
     assert s1a == s1b
-    f1 = full_fingerprint(stage1_key=s1a, simulate=ui_a, overage_rules=None)
-    f2 = full_fingerprint(stage1_key=s1a, simulate=ui_b, overage_rules=None)
+    f1 = stage2_fingerprint(stage1_key=s1a, simulate=ui_a, overage_rules=None)
+    f2 = stage2_fingerprint(stage1_key=s1a, simulate=ui_b, overage_rules=None)
     assert f1 == f2 and f1 != s1a
-    f3 = full_fingerprint(
+    f3 = stage2_fingerprint(
         stage1_key=s1a,
         simulate=base_sim,
         overage_rules=None,
         pcs_kw=100.0,
         batt_kwh=200.0,
     )
-    f4 = full_fingerprint(
+    f4 = stage2_fingerprint(
         stage1_key=s1a,
         simulate=base_sim,
         overage_rules=None,

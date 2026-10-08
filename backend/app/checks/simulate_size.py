@@ -1083,7 +1083,7 @@ def main() -> None:
         voltage_level="HV",
     )
     _assert_benefit_report(s1_only, pending=True)
-    assert s1_only.get("need_full") is True
+    assert s1_only.get("need_stage2") is True
     assert s1_only.get("stage2") is None
     assert int((s1_only.get("benefit_split") or {}).get("contract_gain") or 0) == 0
     s1_summary_ids = {
@@ -1206,7 +1206,7 @@ def main() -> None:
     assert int(s2_alt["savings"]) == int(s1_only["savings"])
     assert (s2_alt.get("benefit_split") or {}) == (s1_only.get("benefit_split") or {})
 
-    # Final Bundle：need_full 的 stage1 不物化；stage2 留下工作表
+    # Final Bundle：need_stage2 的 stage1 不物化；stage2 留下工作表
     assert s1_only.get("_final_bundle") is None
     assert s1_only.get("dispatch_charts") is None
     fb = s2_only.get("_final_bundle")
@@ -1265,8 +1265,8 @@ def main() -> None:
     assert get_final_bundle(caches, k_full) is not None
 
     # 無需 Stage2 時 stage1 直接物化
-    assert out.get("_final_bundle") is None or out.get("need_full") is False
-    if not out.get("need_full"):
+    assert out.get("_final_bundle") is None or out.get("need_stage2") is False
+    if not out.get("need_stage2"):
         # run_size 經 API 才 strip；此處直接呼叫仍可能帶 _final_bundle
         pass
     no_full = run_size_stage1(
@@ -1279,7 +1279,7 @@ def main() -> None:
         end_date=str(df["date"].max()),
         voltage_level="HV",
     )
-    assert no_full.get("need_full") is False
+    assert no_full.get("need_stage2") is False
     assert no_full.get("_final_bundle") is not None
     assert no_full.get("dispatch_charts") is not None
     assert "energy_total_delta" in (no_full.get("energy_transfer") or {})

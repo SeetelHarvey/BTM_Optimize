@@ -21,8 +21,8 @@ uvicorn app.main:app --reload --app-dir .
 | POST   | `/api/import`                | 上傳 → 清一次 → 暫存 → `import_id`                 |
 | DELETE | `/api/import/{import_id}`    | 刪除行程內暫存（不存在也 ok）                            |
 | POST   | `/api/billing/basic`         | `import_id` + 契約 → basic + overage + energy |
-| POST   | `/api/simulate/size`         | Stage1：量體＋電價調度（可回 `need_full`）              |
-| POST   | `/api/simulate/full`         | Stage2：契約／備轉（綁定 `stage1_key`＋目標量體）         |
+| POST   | `/api/simulate/stage1`       | 第 1 層：量體＋電價調度（可回 `need_stage2`）            |
+| POST   | `/api/simulate/stage2`       | 第 2 層：契約／備轉（綁定 `stage1_key`＋目標量體）       |
 | POST   | `/api/charts`                | `import_id` → heatmap（每天 × 96 格）          |
 
 
@@ -70,7 +70,7 @@ JSON（`app/data/`）= 系統預設（含 `simulate_defaults.json`）；試算�
 ```
 app/api/cleaning.py            # 清理 API
 app/api/imports.py             # 匯入、示範檔、暫存
-app/api/simulate.py            # POST /sample、/size 量體試算
+app/api/simulate.py            # POST /sample、/stage1、/stage2 量體試算
 app/api/charts.py              # POST /（heatmap，每天 × 96 格）
 app/api/settings.py            # 設定 API
 app/services/import_store.py   # 匯入序列 dict（TTL、非帳號資料）

@@ -1,4 +1,9 @@
-"""量體試算編排。"""
+"""量體試算編排。
+
+`_` 開頭只在本模組用。跨 API 的層級一律 stage1／stage2：
+stage1＝量體與電價調度（設定不含備轉），stage2＝契約重配與備轉。
+功能 id（tou、demand、reserve、backup）是勾選項，不是層級名。
+"""
 
 import os
 from concurrent.futures import ProcessPoolExecutor
@@ -1080,7 +1085,8 @@ def _simulate_point(
     return out
 
 
-def _functions_without_reserve(functions: list[str] | None) -> list[str]:
+def functions_without_reserve(functions: list[str] | None) -> list[str]:
+    """功能清單去掉 reserve；第 1 層與備轉回退共用。"""
     fns = [f for f in (functions or ["tou"]) if f != "reserve"]
     return fns or ["tou"]
 
@@ -1107,7 +1113,7 @@ def _row_key_pair(pcs_kw: float, batt_kwh: float) -> tuple[float, float]:
     return (round(float(pcs_kw), 3), round(float(batt_kwh), 3))
 
 
-def _stage1_target_row(
+def stage1_target_row(
     stage1_result: dict[str, Any],
     pcs_kw: float | None = None,
     batt_kwh: float | None = None,
@@ -1262,9 +1268,9 @@ def run_size_stage1(
     want_contract = bool(settings.get("evaluateContractReduction")) or (
         "demand" in user_functions
     )
-    need_full = want_reserve or want_contract
+    need_stage2 = want_reserve or want_contract
 
-    sim_settings_l1 = {**settings, "functions": _functions_without_reserve(user_functions)}
+    stage1_settings = {**settings, "functions": functions_without_reserve(user_functions)}
     skipped = skipped_functions(user_functions)
     if "large_user" in (settings.get("functions") or []):
         skipped = sorted(set(skipped) | {"large_user"})
@@ -1311,7 +1317,7 @@ def run_size_stage1(
         df=df,
         plan=plan,
         contracts=effective_contracts,
-        sim_settings=sim_settings_l1,
+        sim_settings=stage1_settings,
         tou_type=tou_type,
         start_date=start_date,
         end_date=end_date,
@@ -1391,12 +1397,12 @@ def run_size_stage1(
     dispatch_charts = (highlight or {}).get("dispatch_charts")
     final_bundle = None
     # 需要 Stage2 時不在此物化；Final Bundle 由 Stage2 產生
-    if dispatch_charts is None and highlight and not (need_full and recommended):
+    if dispatch_charts is None and highlight and not (need_stage2 and recommended):
         final_bundle = materialize_final_point(
             df,
             plan,
             effective_contracts,
-            sim_settings_l1,
+            stage1_settings,
             pcs_kw=float(highlight["pcs_kw"]),
             batt_kwh=float(highlight["batt_kwh"]),
             tou_type=tou_type,
@@ -1434,12 +1440,12 @@ def run_size_stage1(
     if highlight:
         stage1_constraints = _final_constraints(
             contracts=effective_contracts,
-            settings=sim_settings_l1,
+            settings=stage1_settings,
             tou_type=tou_type,
             pcs_kw=float(highlight["pcs_kw"]),
             batt_kwh=float(highlight["batt_kwh"]),
             buffer_kw=resolve_buffer_kw(
-                sim_settings_l1,
+                stage1_settings,
                 contract_kw=regular_kw_of(effective_contracts),
                 key="demandBufferKw",
             ),
@@ -1463,7 +1469,7 @@ def run_size_stage1(
         functions=user_functions,
         feature_summaries=feature_summaries,
         stage="sizing",
-        pending=bool(need_full and recommended),
+        pending=bool(need_stage2 and recommended),
         baseline_tou=baseline_tou,
         simulate_tou=tou_type,
     )
@@ -1503,7 +1509,7 @@ def run_size_stage1(
         "timing": timing,
         "evaluate_contract_reduction": want_contract,
         "final": recommended,
-        "need_full": bool(need_full and recommended),
+        "need_stage2": bool(need_stage2 and recommended),
         "want_reserve": want_reserve,
         "want_contract": want_contract,
     }
@@ -1538,7 +1544,7 @@ def run_size_stage2(
 
     out = dict(stage1_result)
     recommended = out.get("recommended")
-    target = _stage1_target_row(out, pcs_kw, batt_kwh)
+    target = stage1_target_row(out, pcs_kw, batt_kwh)
     want_reserve = bool(out.get("want_reserve")) or (
         "reserve" in (out.get("functions") or [])
     )
@@ -1546,7 +1552,7 @@ def run_size_stage2(
         settings.get("evaluateContractReduction")
     ) or ("demand" in (out.get("functions") or settings.get("functions") or []))
     if not target or not (want_reserve or want_contract):
-        out["need_full"] = False
+        out["need_stage2"] = False
         out["stage2"] = None
         return out
 
@@ -1557,7 +1563,7 @@ def run_size_stage2(
     baseline_tou = baseline_tou_type or out.get("baseline_tou_type") or tou_type
     baseline_df = baseline_df if baseline_df is not None else df
     stage1 = out.get("stage1") or {}
-    effective_contracts = dict(stage1.get("contracts") or contracts)
+    stage1_contracts = dict(stage1.get("contracts") or contracts)
     # 原始帳單契約：與 Stage1 before 同口徑；不可回退成 Stage2 採用契約
     baseline_contracts = (
         baseline_contracts
@@ -1565,25 +1571,25 @@ def run_size_stage2(
         else out.get("baseline_contracts")
     )
     if baseline_contracts is None:
-        baseline_contracts = effective_contracts
+        baseline_contracts = stage1_contracts
     baseline_plan = (
         baseline_plan if baseline_plan is not None else out.get("baseline_plan")
     )
-    effective_cap = ContractCapacity.from_dict(effective_contracts)
+    stage1_cap = ContractCapacity.from_dict(stage1_contracts)
     # 所有配置共用同一 before（Stage1 原始帳單）；各點只換 after
     before_summary = out.get("before") or stage1.get("before") or {}
     before_total = int(before_summary.get("total") or 0)
     user_functions = list(out.get("functions") or settings.get("functions") or ["tou"])
-    sim_settings_l1 = {
+    stage1_settings = {
         **settings,
-        "functions": _functions_without_reserve(user_functions),
+        "functions": functions_without_reserve(user_functions),
     }
-    sim_settings_l2 = {**settings, "functions": user_functions}
+    stage2_settings = {**settings, "functions": user_functions}
     tou_step = int(plan.get("tou_slot_minutes") or 60)
 
     pcs_kw = float(target["pcs_kw"])
     batt_kwh = float(target["batt_kwh"])
-    buffer_kw = scaled_buffer_kw(regular_kw_of(effective_contracts), settings)
+    buffer_kw = scaled_buffer_kw(regular_kw_of(stage1_contracts), settings)
     stage1_total = int(target.get("after_total") or 0)
     if stage1_total <= 0 and recommended and _row_key_pair(
         recommended["pcs_kw"], recommended["batt_kwh"]
@@ -1591,7 +1597,7 @@ def run_size_stage2(
         stage1_total = int(out.get("after", {}).get("total") or 0)
     stage1_bill_save = before_total - stage1_total
 
-    contracts_l2 = dict(effective_contracts)
+    stage2_contracts = dict(stage1_contracts)
     selected_candidate: dict[str, Any] | None = None
     proposed_candidate: dict[str, Any] | None = None
     reduction_info = None
@@ -1599,14 +1605,14 @@ def run_size_stage2(
     best_summary: dict[str, Any] | None = None
     current_contract_bill: dict[str, int] | None = None
     proposed_contract_bill: dict[str, int] | None = None
-    eff_fp = _contracts_fingerprint(effective_contracts)
+    stage1_fp = _contracts_fingerprint(stage1_contracts)
 
     if want_contract:
-        disp_l1, _, _ = _dispatch_for_point(
+        stage1_disp, _, _ = _dispatch_for_point(
             df,
             plan,
-            effective_contracts,
-            sim_settings_l1,
+            stage1_contracts,
+            stage1_settings,
             pcs_kw=pcs_kw,
             batt_kwh=batt_kwh,
             tou_type=tou_type,
@@ -1615,28 +1621,28 @@ def run_size_stage2(
         )
         dispatch_count += 1
         residual = suggest_regular_kw_from_dispatch(
-            disp_l1,
-            current_regular_kw=float(effective_cap.regular_kw),
+            stage1_disp,
+            current_regular_kw=float(stage1_cap.regular_kw),
             buffer_kw=buffer_kw,
             target_periods=frozenset({"peak"}),
         )
         reduction_info = residual
         proposed_candidate = rule_based_contract_proposal(
-            effective_contracts,
+            stage1_contracts,
             tou_type,
             residual=residual,
             buffer_kw=buffer_kw,
         )
-        l1_summary = _summary_from_grid_row(target, disp_l1)
+        stage1_summary = _summary_from_grid_row(target, stage1_disp)
         proposal_contracts = dict(proposed_candidate["contracts"])
-        if _contracts_fingerprint(proposal_contracts) == eff_fp:
-            proposal_summary = l1_summary
+        if _contracts_fingerprint(proposal_contracts) == stage1_fp:
+            proposal_summary = stage1_summary
         else:
             proposal_summary = _simulate_point(
                 df,
                 plan,
                 proposal_contracts,
-                sim_settings_l1,
+                stage1_settings,
                 pcs_kw=pcs_kw,
                 batt_kwh=batt_kwh,
                 tou_type=tou_type,
@@ -1674,12 +1680,12 @@ def run_size_stage2(
                 ),
             }
         )
-        current_total = int(l1_summary["total"])
+        current_total = int(stage1_summary["total"])
         stage1_total = current_total
         current_contract_bill = {
-            "basic_total": int(l1_summary.get("basic_total") or 0),
-            "overage_total": int(l1_summary.get("overage_total") or 0),
-            "energy_total": int(l1_summary.get("energy_total") or 0),
+            "basic_total": int(stage1_summary.get("basic_total") or 0),
+            "overage_total": int(stage1_summary.get("overage_total") or 0),
+            "energy_total": int(stage1_summary.get("energy_total") or 0),
             "total": current_total,
         }
         proposed_contract_bill = {
@@ -1692,24 +1698,24 @@ def run_size_stage2(
         proposed_candidate["adopted"] = adopted
         proposed_candidate["bill_delta"] = int(proposal_summary["total"]) - current_total
         if adopted:
-            contracts_l2 = proposal_contracts
+            stage2_contracts = proposal_contracts
             contract_disp = proposal_summary.get("disp")
             best_summary = proposal_summary
             selected_candidate = proposed_candidate
         else:
-            contracts_l2 = dict(effective_contracts)
-            contract_disp = disp_l1
-            best_summary = l1_summary
+            stage2_contracts = dict(stage1_contracts)
+            contract_disp = stage1_disp
+            best_summary = stage1_summary
             selected_candidate = {
                 "id": "baseline",
-                "contracts": contracts_l2,
+                "contracts": stage2_contracts,
                 "feasible": True,
                 "reject_reason": None,
                 "bill_total": current_total,
-                "basic_total": int(l1_summary.get("basic_total") or 0),
-                "overage_total": int(l1_summary.get("overage_total") or 0),
-                "energy_total": int(l1_summary.get("energy_total") or 0),
-                "regular_kw": float(effective_cap.regular_kw),
+                "basic_total": int(stage1_summary.get("basic_total") or 0),
+                "overage_total": int(stage1_summary.get("overage_total") or 0),
+                "energy_total": int(stage1_summary.get("energy_total") or 0),
+                "regular_kw": float(stage1_cap.regular_kw),
                 "allowance_added_kw": 0.0,
             }
 
@@ -1717,15 +1723,15 @@ def run_size_stage2(
         contract_summary = best_summary
     elif (
         contract_disp is not None
-        and _contracts_fingerprint(contracts_l2) == eff_fp
+        and _contracts_fingerprint(stage2_contracts) == stage1_fp
     ):
         contract_summary = _summary_from_grid_row(target, contract_disp)
     else:
         contract_summary = _simulate_point(
             df,
             plan,
-            contracts_l2,
-            sim_settings_l1,
+            stage2_contracts,
+            stage1_settings,
             pcs_kw=pcs_kw,
             batt_kwh=batt_kwh,
             tou_type=tou_type,
@@ -1753,8 +1759,8 @@ def run_size_stage2(
         final_summary = _simulate_point(
             df,
             plan,
-            contracts_l2,
-            sim_settings_l2,
+            stage2_contracts,
+            stage2_settings,
             pcs_kw=pcs_kw,
             batt_kwh=batt_kwh,
             tou_type=tou_type,
@@ -1827,11 +1833,11 @@ def run_size_stage2(
         final_disp = contract_disp
     reserve_meta = final_summary.get("reserve_meta")
     constraints = _final_constraints(
-        contracts=contracts_l2,
+        contracts=stage2_contracts,
         settings=(
-            sim_settings_l2
+            stage2_settings
             if want_reserve and reserve_warning is None
-            else sim_settings_l1
+            else stage1_settings
         ),
         tou_type=tou_type,
         pcs_kw=pcs_kw,
@@ -1840,17 +1846,17 @@ def run_size_stage2(
         reserve_meta=reserve_meta,
     )
     feasibility = _feasibility_by_period(
-        final_disp, contracts_l2, tou_type, buffer_kw=buffer_kw
+        final_disp, stage2_contracts, tou_type, buffer_kw=buffer_kw
     )
     proposal = {
         "contracts": {
-            "original": effective_contracts,
+            "original": stage1_contracts,
             "proposed": (
                 dict(proposed_candidate.get("contracts") or {})
                 if proposed_candidate
                 else None
             ),
-            "suggested": contracts_l2,
+            "suggested": stage2_contracts,
             "selected": selected_candidate,
             "rule": proposed_candidate,
             "reduction": reduction_info,
@@ -1885,7 +1891,7 @@ def run_size_stage2(
         "tou_meta": final_summary.get("tou_meta") or target.get("tou_meta"),
         "energy_transfer": final_summary.get("energy_transfer"),
         "dispatch_charts": final_summary.get("charts"),
-        "stage2_contracts": contracts_l2,
+        "stage2_contracts": stage2_contracts,
         "contract_reduction": reduction_info,
         "selected_contract": selected_candidate,
         "benefit_split": benefit_split,
@@ -1911,11 +1917,11 @@ def run_size_stage2(
         final_bundle = materialize_final_point(
             df,
             plan,
-            contracts_l2,
+            stage2_contracts,
             (
-                sim_settings_l2
+                stage2_settings
                 if want_reserve and reserve_warning is None
-                else sim_settings_l1
+                else stage1_settings
             ),
             pcs_kw=pcs_kw,
             batt_kwh=batt_kwh,
@@ -1929,7 +1935,7 @@ def run_size_stage2(
             baseline_tou=baseline_tou,
             baseline_contracts=baseline_contracts,
             baseline_plan=baseline_plan,
-            scheme_contracts=contracts_l2,
+            scheme_contracts=stage2_contracts,
             disp=final_disp,
             tou_meta=point.get("tou_meta"),
             reserve_info={
@@ -1953,7 +1959,7 @@ def run_size_stage2(
         proposal=proposal,
         reserve_meta=reserve_meta,
         reserve_income=final_summary.get("reserve_income"),
-        contracts=contracts_l2,
+        contracts=stage2_contracts,
     )
     point["benefit_report"] = _build_benefit_report(
         before=before_summary,
@@ -1993,11 +1999,11 @@ def run_size_stage2(
     out["stage2"] = stage2
     out["timing"] = timing
     out["evaluate_contract_reduction"] = want_contract
-    out["need_full"] = False
+    out["need_stage2"] = False
     out.pop("_sizing_bundle", None)
     if final_bundle is not None:
         out["_final_bundle"] = final_bundle
-        out["scheme_contracts"] = contracts_l2
+        out["scheme_contracts"] = stage2_contracts
     # 非推薦點只附 stage2，不覆寫主報告頂層（避免污染推薦口徑）
     if is_recommended:
         out.update(
@@ -2059,7 +2065,7 @@ def run_size(
         baseline_plan=baseline_plan,
         baseline_df=baseline_df,
     )
-    if not stage1.get("need_full"):
+    if not stage1.get("need_stage2"):
         return stage1
     return run_size_stage2(
         stage1,

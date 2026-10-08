@@ -17,15 +17,15 @@ from app.services.bess.run import (
     run_export_xlsx,
     run_sample,
     run_sample_from_profile_cache,
+    functions_without_reserve,
     run_size_stage1,
     run_size_stage2,
-    _functions_without_reserve,
-    _stage1_target_row,
+    stage1_target_row,
 )
 from app.services.import_cache import (
     compare_bill_fingerprint,
     final_bundle_fingerprint,
-    full_fingerprint,
+    stage2_fingerprint,
     plan_fingerprint,
     profile_fingerprint,
     sample_fingerprint,
@@ -274,7 +274,7 @@ async def api_simulate_sample(
     holidays: str | None = Form(None),
     baseline_contracts: str | None = Form(None),
 ):
-    """試算前負載樣本／配置點數預覽（先於 /size）。"""
+    """試算前負載樣本／配置點數預覽（先於 /stage1）。"""
     try:
         (
             stored,
@@ -332,8 +332,8 @@ async def api_simulate_sample(
         raise HTTPException(400, str(e)) from e
 
 
-@router.post("/size")
-async def api_simulate_size(
+@router.post("/stage1")
+async def api_simulate_stage1(
     import_id: str = Form(...),
     contracts: str = Form(...),
     simulate: str = Form(...),
@@ -409,7 +409,7 @@ async def api_simulate_size(
             baseline_df=baseline_df,
         )
         final_bundle = result.get("_final_bundle")
-        sizing_fns = _functions_without_reserve(
+        sizing_fns = functions_without_reserve(
             list(result.get("functions") or sim_obj.get("functions") or ["tou"])
         )
         if final_bundle is not None:
@@ -430,8 +430,8 @@ async def api_simulate_size(
         raise HTTPException(400, str(e)) from e
 
 
-@router.post("/full")
-async def api_simulate_full(
+@router.post("/stage2")
+async def api_simulate_stage2(
     import_id: str = Form(...),
     contracts: str = Form(...),
     simulate: str = Form(...),
@@ -491,27 +491,27 @@ async def api_simulate_full(
         target_batt = float(batt_kwh) if batt_kwh not in (None, "") else None
         if (target_pcs is None) ^ (target_batt is None):
             raise HTTPException(400, "pcs_kw 與 batt_kwh 需同時提供")
-        target = _stage1_target_row(stage1, target_pcs, target_batt)
+        target = stage1_target_row(stage1, target_pcs, target_batt)
         if target is None:
             raise HTTPException(400, "目標量體不在試算結果中")
         target_pcs = float(target["pcs_kw"])
         target_batt = float(target["batt_kwh"])
 
-        full_key = full_fingerprint(
+        stage2_key = stage2_fingerprint(
             stage1_key=stage1_key,
             simulate=sim_cache,
             overage_rules=rules_obj,
             pcs_kw=target_pcs,
             batt_kwh=target_batt,
         )
-        hit = stored.caches.get(full_key)
+        hit = stored.caches.get(stage2_key)
         if isinstance(hit, dict) and "grid" in hit:
             return _strip_internal_bundles(hit)
 
-        if not stage1.get("need_full"):
-            result = {**stage1, "stage1_key": stage1_key, "need_full": False}
-            stored.caches[full_key] = _strip_internal_bundles(result)
-            return stored.caches[full_key]
+        if not stage1.get("need_stage2"):
+            result = {**stage1, "stage1_key": stage1_key, "need_stage2": False}
+            stored.caches[stage2_key] = _strip_internal_bundles(result)
+            return stored.caches[stage2_key]
 
         result = await asyncio.to_thread(
             run_size_stage2,
@@ -536,12 +536,12 @@ async def api_simulate_full(
         final_bundle = result.get("_final_bundle")
         final = (result.get("stage2") or {}).get("final") or result.get("final")
         adopted = (final or {}).get("stage2_contracts") or contracts_obj
-        full_fns = list(result.get("functions") or sim_obj.get("functions") or ["tou"])
-        # rollback 備轉時功能集合不含 reserve（物化時已用 l1 settings）
+        stage2_fns = list(result.get("functions") or sim_obj.get("functions") or ["tou"])
+        # rollback 備轉時功能集合不含 reserve（物化時已用 stage1_settings）
         if (final or {}).get("stage2_warning") == "reserve_no_net_gain" or (
             (final or {}).get("reserve_meta") or {}
         ).get("rolled_back"):
-            full_fns = _functions_without_reserve(full_fns)
+            stage2_fns = functions_without_reserve(stage2_fns)
         if final_bundle is not None:
             _store_final_bundle(
                 stored,
@@ -549,12 +549,12 @@ async def api_simulate_full(
                 contracts_obj=contracts_obj,
                 sim_obj=sim_obj,
                 bundle=final_bundle,
-                functions=full_fns,
+                functions=stage2_fns,
             )
         result = {**_strip_internal_bundles(result), "stage1_key": stage1_key}
         if adopted:
             result["scheme_contracts"] = adopted
-        stored.caches[full_key] = result
+        stored.caches[stage2_key] = result
         return result
     except HTTPException:
         raise
@@ -610,7 +610,7 @@ async def api_simulate_dispatch_charts(
         if scheme_obj is not None:
             fns = list(sim_obj.get("functions") or ["tou"])
         else:
-            fns = _functions_without_reserve(list(sim_obj.get("functions") or ["tou"]))
+            fns = functions_without_reserve(list(sim_obj.get("functions") or ["tou"]))
         _fk, bundle = _lookup_final_bundle(
             stored,
             plan_key=plan_key,
@@ -720,7 +720,7 @@ async def api_simulate_compare_bill(
         if scheme_obj is not None:
             fns = list(sim_obj.get("functions") or ["tou"])
         else:
-            fns = _functions_without_reserve(list(sim_obj.get("functions") or ["tou"]))
+            fns = functions_without_reserve(list(sim_obj.get("functions") or ["tou"]))
         _fk, bundle = _lookup_final_bundle(
             stored,
             plan_key=plan_key,
@@ -843,7 +843,7 @@ async def api_simulate_export(
         if scheme_obj is not None:
             fns = list(sim_obj.get("functions") or ["tou"])
         else:
-            fns = _functions_without_reserve(list(sim_obj.get("functions") or ["tou"]))
+            fns = functions_without_reserve(list(sim_obj.get("functions") or ["tou"]))
         _fk, bundle = _lookup_final_bundle(
             stored,
             plan_key=plan_key,
