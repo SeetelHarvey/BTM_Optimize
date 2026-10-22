@@ -7,7 +7,25 @@ def main() -> None:
     sim = default_simulate()
     assert 0 <= sim["socMin"] < sim["socMax"] <= 1
     assert 0.5 <= sim["chargeEff"] <= 1
+    assert 0 <= float(sim["bufferPct"]) <= 100
+    assert "bufferMinKw" not in sim
+    assert "bufferMaxKw" not in sim
     assert "calendarDeg" not in sim
+    for key in (
+        "reserveCapacityPrice",
+        "reservePerformancePrice",
+        "reserveEnergyPrice",
+        "reserveMonthlyDispatchCount",
+    ):
+        assert key in sim
+        assert float(sim[key]) >= 0
+    assert "evaluateContractReduction" not in sim
+    assert sim.get("sizingFree") is False
+    from app.services.bess.size_grid import contract_sizing_open
+
+    assert contract_sizing_open({"functions": ["tou"]}) is False
+    assert contract_sizing_open({"functions": ["tou"], "sizingFree": True}) is True
+    assert contract_sizing_open({"functions": ["tou", "demand"]}) is True
     bundle = default_settings()
     assert "simulate" in bundle
     print("ok", sorted(sim.keys()))

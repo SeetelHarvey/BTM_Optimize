@@ -9,7 +9,7 @@ from app.services.billing.demand import (
     bill_mode,
     iter_billing_months,
 )
-from app.services.contracts import (
+from app.services.contract_rules import (
     ContractCapacity,
     cumulative_ceiling,
     money,

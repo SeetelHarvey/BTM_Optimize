@@ -12,7 +12,7 @@ from app.api.router import api_router
 app = FastAPI(
     title="BTM Optimize API",
     description="Backend for BTM_Optimize. UI lives in frontend",
-    version="0.1.0",
+    version="0.1.2",
 )
 
 app.add_middleware(

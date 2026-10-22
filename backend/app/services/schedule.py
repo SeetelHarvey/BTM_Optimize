@@ -128,7 +128,7 @@ def label_periods(
     *,
     time_col: str = "timestamp",
 ) -> pd.DataFrame:
-    """標註 is_holiday / season / period。"""
+    """標註 is_holiday / season / period（向量化）。"""
     out = df.copy()
     if not {"date", "min", "hour"}.issubset(out.columns):
         out = enrich_interval_end(out, time_col=time_col)
@@ -138,22 +138,32 @@ def label_periods(
     summer_range = ctx["summer_range"]
     per_slot = slots_per_tou_slot(tou_slot)
 
-    is_holiday, season, period = [], [], []
-    for i in range(len(out)):
-        d = out["date"].iloc[i]
-        if not isinstance(d, date):
-            d = pd.Timestamp(d).date()
-        min15 = int(out["min"].iloc[i])
-        hol = d.isoformat() in holidays
-        sea = "summer" if is_summer(d, summer_range) else "non_summer"
-        wd = d.weekday()
-        sl = min15 // per_slot
-        p = "off_peak" if hol else str(ctx["matrix"][sea][wd, sl])
-        is_holiday.append(hol)
-        season.append(sea)
-        period.append(p)
+    ts = pd.to_datetime(out["date"])
+    iso = ts.dt.strftime("%Y-%m-%d")
+    is_hol = iso.isin(holidays).to_numpy()
+    md = ts.dt.month.to_numpy() * 100 + ts.dt.day.to_numpy()
+    start_key = int(summer_range["start_month"]) * 100 + int(summer_range["start_day"])
+    end_key = int(summer_range["end_month"]) * 100 + int(summer_range["end_day"])
+    season = np.where(
+        (md >= start_key) & (md <= end_key),
+        "summer",
+        "non_summer",
+    )
+    wd = ts.dt.weekday.to_numpy()
+    sl = (out["min"].astype(int).to_numpy() // per_slot)
 
-    out["is_holiday"] = is_holiday
+    period = np.empty(len(out), dtype=object)
+    period[:] = "off_peak"
+    mat_s = ctx["matrix"]["summer"]
+    mat_n = ctx["matrix"]["non_summer"]
+    mask_s = (~is_hol) & (season == "summer")
+    mask_n = (~is_hol) & (season == "non_summer")
+    if mask_s.any():
+        period[mask_s] = mat_s[wd[mask_s], sl[mask_s]]
+    if mask_n.any():
+        period[mask_n] = mat_n[wd[mask_n], sl[mask_n]]
+
+    out["is_holiday"] = is_hol
     out["season"] = season
     out["period"] = period
     return out

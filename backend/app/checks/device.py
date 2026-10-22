@@ -31,6 +31,7 @@ def main() -> None:
     expect_d = soc2 - (40 * dt / 0.85) / 200
     assert abs(soc3 - expect_d) < 1e-9
 
+    # 防逆送：load 已低於門檻 → 不強制充電；可閒置，不可再放電打穿
     d2 = Device(
         pcs_kw=100,
         batt_kwh=200,
@@ -40,9 +41,27 @@ def main() -> None:
         anti_export_kw=10,
     )
     lo, hi = d2.bounds(0.5, load_kw=5)
-    assert lo >= 5
-    ess_ae, _ = d2.apply(-100, 0.5, load_kw=5)
-    assert ess_ae >= 5
+    assert lo == 0.0
+    assert hi > 0
+    ess_idle, _ = d2.apply(-100, 0.5, load_kw=5)
+    assert ess_idle == 0.0
+    ess_chg, _ = d2.apply(50, 0.5, load_kw=5)
+    assert ess_chg == 50  # 允許主動充電，但不被硬逼
+
+    # SOC 已滿且 load < anti → 閒置，不充電
+    lo_full, hi_full = d2.bounds(0.9, load_kw=5)
+    assert hi_full == 0.0
+    assert lo_full == 0.0
+    ess_full, soc_full = d2.apply(100, 0.9, load_kw=5)
+    assert ess_full == 0.0
+    assert abs(soc_full - 0.9) < 1e-9
+
+    # load 夠高：放電下限 = anti − load（grid 不低於 anti）
+    lo_ok, hi_ok = d2.bounds(0.5, load_kw=50)
+    assert lo_ok == -40.0
+    ess_dis, _ = d2.apply(-100, 0.5, load_kw=50)
+    assert ess_dis == -40.0
+    assert grid_kw(50, ess_dis) >= 10.0 - 1e-9
 
     lo_f, hi_f = d.bounds(0.9, load_kw=50)
     assert hi_f == 0

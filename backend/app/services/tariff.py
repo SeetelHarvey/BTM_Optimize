@@ -30,9 +30,18 @@ def get_rates(
 def apply_energy_prices(df: pd.DataFrame, prices: dict) -> pd.DataFrame:
     """依 season / period 寫入 energy_price。"""
     out = df.copy()
-    out["energy_price"] = [
-        prices[sea].get(p) for sea, p in zip(out["season"], out["period"])
-    ]
+    sea = out["season"].astype(str)
+    per = out["period"].astype(str)
+    # 建 lookup 表一次 merge，避免逐列 dict 查
+    pairs = {
+        (s, p): float(v)
+        for s, block in (prices or {}).items()
+        if isinstance(block, dict)
+        for p, v in block.items()
+        if v is not None
+    }
+    keys = list(zip(sea.tolist(), per.tolist()))
+    out["energy_price"] = [pairs.get(k) for k in keys]
     return out
 
 

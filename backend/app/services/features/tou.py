@@ -1,18 +1,18 @@
-"""時間電價：auto／manual 目標 SOC → 軟意圖 ess_kw。
+"""時間電價：唯一 schedule 解析 → 目標 SOC → 軟意圖 ess_kw。
 
-auto 策略（非寫死時段名）：
-1. 價差須蓋過往返損耗：P_hi/P_lo ≥ 1/η²，否則不為流動電費循環。
-2. 當季最高／最低：過門檻則放電(0)／充電(1)。
-3. 中價：看下一個相鄰時段電價——next 更貴且過門檻則充(1)；否則維持(HOLD)。
+Auto／Manual 差異只在矩陣來源；執行端只讀 schedule。
+Auto：相鄰時段價差過 η² 門檻後，以理論 0／100% 目標套利（不預測未來需求；device 再夾有效窗）。
+ponytail: 相鄰時段 heuristic；日後可升級 24–48h 滾動最佳化。
 """
 
 from typing import Any
+
+import pandas as pd
 
 from app.services.schedule import hours_per_data_row
 
 HOLD = None  # 維持 SOC，不充不放
 
-# 時段矩陣日鍵：跨日 look-ahead（weekday 模板當週一～四／五夜間皆接下一日離峰起點）
 _NEXT_DAY_KEY = {
     "weekday": "weekday",
     "saturday": "sunday",
@@ -21,7 +21,7 @@ _NEXT_DAY_KEY = {
 
 
 def _as_soc01(v: Any, fallback: float = 0.5) -> float:
-    """手動矩陣為 0–100百分比；後端統一 0–1 小數。"""
+    """矩陣為 0–100%；後端統一 0–1。"""
     try:
         x = float(v)
     except (TypeError, ValueError):
@@ -31,8 +31,8 @@ def _as_soc01(v: Any, fallback: float = 0.5) -> float:
     return max(0.0, min(1.0, x))
 
 
-def _manual_cell_hold(v: Any) -> bool:
-    """空白／null＝維持（對齊 auto HOLD）。"""
+def _cell_hold(v: Any) -> bool:
+    """空白／null＝HOLD。"""
     if v is None:
         return True
     if isinstance(v, str) and not v.strip():
@@ -40,11 +40,22 @@ def _manual_cell_hold(v: Any) -> bool:
     return False
 
 
-def schedule_day_key(ts, *, is_holiday: bool = False) -> str:
-    """對齊前端矩陣：weekday／saturday／sunday（假日當 sunday）。"""
+def _soc_pct(soc01: float) -> int:
+    """0–1 → 整數百分比。"""
+    return int(round(max(0.0, min(1.0, float(soc01))) * 100.0))
+
+
+def schedule_day_key(day, *, is_holiday: bool = False) -> str:
+    """區間所屬日 → weekday／saturday／sunday（假日當 sunday）。"""
     if is_holiday:
         return "sunday"
-    wd = int(ts.weekday()) if hasattr(ts, "weekday") else int(ts)
+    try:
+        if hasattr(day, "weekday") and not isinstance(day, (int, float)):
+            wd = int(pd.Timestamp(day).weekday())
+        else:
+            wd = int(day)
+    except (TypeError, ValueError, OverflowError):
+        return "weekday"
     if wd == 5:
         return "saturday"
     if wd == 6:
@@ -58,35 +69,17 @@ def slot_index(
     step_minutes: int = 60,
     data_min: int | None = None,
 ) -> int:
-    """當日時段槽：優先用資料列 min(0–95)，否則用 timestamp。"""
+    """當日時段槽：優先用資料列 min(0–95)。"""
     step = int(step_minutes) or 60
     per = max(1, step // 15)
     if data_min is not None:
         return max(0, int(data_min) // per)
     if ts is None:
         return 0
-    minutes = int(ts.hour) * 60 + int(ts.minute)
-    if minutes == 0:
-        min15 = 95
-    else:
-        min15 = (minutes - 15) // 15
-    return max(0, min15 // per)
+    from app.services.cleaning.formats.tpc import period_from_label
 
-
-def row_hour(
-    *,
-    hour: float | int | None = None,
-    data_min: int | None = None,
-    timestamp=None,
-) -> float | None:
-    """列所屬整點（對齊 tpc interval-end 的 hour）。"""
-    if hour is not None:
-        return float(hour)
-    if data_min is not None:
-        return float(int(data_min) // 4)
-    if timestamp is not None:
-        return float(int(timestamp.hour)) + float(getattr(timestamp, "minute", 0) or 0) / 60.0
-    return None
+    _d, min15, _h = period_from_label(pd.Series([ts]))
+    return max(0, int(min15.iloc[0]) // per)
 
 
 def worth_arbitrage(p_hi: float, p_lo: float, charge_eff: float) -> bool:
@@ -100,6 +93,22 @@ def worth_arbitrage(p_hi: float, p_lo: float, charge_eff: float) -> bool:
     if hi <= 0 or lo <= 0 or eta <= 0:
         return False
     return hi / lo >= 1.0 / (eta * eta)
+
+
+def season_price_map(prices: dict | None, season: str) -> dict[str, float]:
+    """單季 period→電價（略過無效值）。"""
+    block = (prices or {}).get(season) if prices else None
+    if not isinstance(block, dict):
+        return {}
+    out: dict[str, float] = {}
+    for k, v in block.items():
+        try:
+            x = float(v)
+        except (TypeError, ValueError):
+            continue
+        if x > 0:
+            out[str(k)] = x
+    return out
 
 
 def next_period(
@@ -128,7 +137,6 @@ def next_period(
             idx = i
             break
     if idx is None:
-        # 落在最後一段終點附近（例如 h=24）
         if h >= float(segs[-1]["start"]):
             idx = len(segs) - 1
         else:
@@ -140,90 +148,217 @@ def next_period(
     return str(nxt[0]["period"]) if nxt else None
 
 
-def auto_target_soc(
+def period_at_hour(
+    schedule: dict | None,
+    tou_type: str | None,
     *,
-    season: str | None,
-    period: str | None,
+    season: str,
+    day_key: str,
+    hour: float,
+) -> str | None:
+    """指定時刻所屬時段名。"""
+    if not schedule or not tou_type:
+        return None
+    block = (schedule.get(tou_type) or {}).get(season)
+    if not isinstance(block, dict):
+        return None
+    segs = list(block.get(day_key) or [])
+    if not segs:
+        return None
+    h = float(hour)
+    for seg in segs:
+        start = float(seg["start"])
+        end = float(seg["end"])
+        if start <= h < end:
+            return str(seg["period"])
+    if h >= float(segs[-1]["start"]):
+        return str(segs[-1]["period"])
+    return None
+
+
+def empty_tou_schedule(step_minutes: int = 60) -> dict[str, dict[str, list[Any]]]:
+    """全 HOLD 矩陣。"""
+    step = int(step_minutes) or 60
+    n = max(1, int(round((24 * 60) / step)))
+    z = [None] * n
+    return {
+        "summer": {"weekday": list(z), "saturday": list(z), "sunday": list(z)},
+        "non_summer": {"weekday": list(z), "saturday": list(z), "sunday": list(z)},
+    }
+
+
+def normalize_tou_schedule(
+    raw: Any,
+    *,
+    step_minutes: int = 60,
+) -> dict[str, dict[str, list[Any]]]:
+    """正規化使用者／推薦矩陣；缺格補 HOLD。"""
+    step = int(step_minutes) or 60
+    n = max(1, int(round((24 * 60) / step)))
+    base = empty_tou_schedule(step)
+    if not isinstance(raw, dict):
+        return base
+    out: dict[str, dict[str, list[Any]]] = {}
+    for season in ("summer", "non_summer"):
+        src_season = raw.get(season) if isinstance(raw.get(season), dict) else {}
+        day_map: dict[str, list[Any]] = {}
+        for day_key in ("weekday", "saturday", "sunday"):
+            row_raw = src_season.get(day_key)
+            row: list[Any] = []
+            for i in range(n):
+                cell = row_raw[i] if isinstance(row_raw, (list, tuple)) and i < len(row_raw) else None
+                if _cell_hold(cell):
+                    row.append(None)
+                else:
+                    row.append(_soc_pct(_as_soc01(cell, 0.0)))
+            day_map[day_key] = row
+        out[season] = day_map
+    return out
+
+
+def build_auto_tou_schedule(
+    *,
+    tou_type: str,
     prices: dict | None,
-    energy_price: float | None = None,
+    period_schedule: dict | None,
+    step_minutes: int = 60,
     charge_eff: float = 0.85,
-    next_period_name: str | None = None,
-) -> float | None:
-    """auto：效率門檻 + 高低價；中價依下一相鄰時段決定充／維持。"""
-    if season is None or period is None or not prices:
-        return HOLD
-    season_prices = prices.get(season)
-    if not isinstance(season_prices, dict) or period not in season_prices:
-        return HOLD
-    vals = [float(v) for v in season_prices.values() if v is not None]
-    if not vals:
-        return HOLD
-    p_min = min(vals)
-    p_max = max(vals)
-    if p_max <= p_min:
-        return HOLD
-    try:
-        price = float(
-            energy_price
-            if energy_price is not None
-            else season_prices[period]
+    soc_min: float = 0.1,
+    soc_max: float = 0.9,
+) -> dict[str, dict[str, list[Any]]]:
+    """Auto：相鄰時段 η² 套利 → 理論 0／100% 目標矩陣（執行端再夾 soc_min／soc_max）。"""
+    # soc_min／soc_max 仍由 resolve_tou_schedule 寫入 meta；矩陣刻意用理論上下限
+    step = int(step_minutes) or 60
+    n = max(1, int(round((24 * 60) / step)))
+    lo_pct, hi_pct = 0, 100
+    out: dict[str, dict[str, list[Any]]] = {}
+    for season in ("summer", "non_summer"):
+        season_prices = season_price_map(prices, season)
+        vals = list(season_prices.values())
+        p_min = min(vals) if vals else None
+        p_max = max(vals) if vals else None
+        season_arb = (
+            p_min is not None
+            and p_max is not None
+            and worth_arbitrage(p_max, p_min, charge_eff)
         )
-    except (TypeError, ValueError):
-        return HOLD
+        day_map: dict[str, list[Any]] = {}
+        for day_key in ("weekday", "saturday", "sunday"):
+            row: list[Any] = []
+            for slot in range(n):
+                hour = slot * (step / 60.0)
+                period = period_at_hour(
+                    period_schedule,
+                    tou_type,
+                    season=season,
+                    day_key=day_key,
+                    hour=hour,
+                )
+                if not season_arb or not season_prices or not period:
+                    row.append(None)
+                    continue
+                try:
+                    price = float(season_prices[period])
+                except (KeyError, TypeError, ValueError):
+                    row.append(None)
+                    continue
 
-    if price >= p_max:
-        return 0.0 if worth_arbitrage(p_max, p_min, charge_eff) else HOLD
-    if price <= p_min:
-        return 1.0 if worth_arbitrage(p_max, p_min, charge_eff) else HOLD
+                if p_min is not None and price <= p_min + 1e-12:
+                    row.append(hi_pct)
+                    continue
+                if p_max is not None and price >= p_max - 1e-12:
+                    row.append(lo_pct)
+                    continue
 
-    # 中價：僅當下一時段更貴且過門檻才預充電
-    if not next_period_name or next_period_name not in season_prices:
-        return HOLD
-    try:
-        next_price = float(season_prices[next_period_name])
-    except (TypeError, ValueError):
-        return HOLD
-    if next_price > price and worth_arbitrage(next_price, price, charge_eff):
-        return 1.0
-    return HOLD
+                nxt = next_period(
+                    period_schedule,
+                    tou_type,
+                    season=season,
+                    day_key=day_key,
+                    hour=hour,
+                )
+                if not nxt or nxt not in season_prices:
+                    row.append(None)
+                    continue
+                try:
+                    next_price = float(season_prices[nxt])
+                except (TypeError, ValueError):
+                    row.append(None)
+                    continue
+
+                if next_price > price + 1e-12 and worth_arbitrage(next_price, price, charge_eff):
+                    row.append(hi_pct)
+                elif next_price < price - 1e-12 and worth_arbitrage(price, next_price, charge_eff):
+                    row.append(lo_pct)
+                else:
+                    row.append(None)
+            day_map[day_key] = row
+        out[season] = day_map
+    return out
+
+
+def resolve_tou_schedule(
+    settings: dict[str, Any],
+    *,
+    tou_type: str,
+    prices: dict | None,
+    period_schedule: dict | None,
+    tou_step_minutes: int,
+    soc_min: float,
+    soc_max: float,
+    charge_eff: float,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """唯一 schedule 入口：Auto 產生／Manual 正規化；回傳 (local_settings, tou_meta)。"""
+    from app.services import settings as settings_svc
+
+    local = dict(settings)
+    step = int(tou_step_minutes) or 60
+    mode = str(local.get("touScheduleMode") or "auto").lower()
+    sched_periods = (
+        period_schedule if period_schedule is not None else settings_svc.default_schedule()
+    )
+    if mode == "manual":
+        sched = normalize_tou_schedule(local.get("touSchedule"), step_minutes=step)
+        source = "manual"
+    else:
+        sched = build_auto_tou_schedule(
+            tou_type=tou_type,
+            prices=prices,
+            period_schedule=sched_periods,
+            step_minutes=step,
+            charge_eff=charge_eff,
+            soc_min=soc_min,
+            soc_max=soc_max,
+        )
+        source = "auto"
+    local = {**local, "touSchedule": sched}
+    meta = {
+        "mode": source,
+        "source": source,
+        "recommended_schedule": sched,
+        "soc_min": float(soc_min),
+        "soc_max": float(soc_max),
+    }
+    return local, meta
 
 
 def target_soc(
     *,
-    mode: str,
-    period: str | None,
     season: str | None = None,
     day_key: str | None = None,
     slot: int | None = None,
     tou_schedule: dict | None = None,
-    prices: dict | None = None,
-    energy_price: float | None = None,
-    charge_eff: float = 0.85,
-    next_period_name: str | None = None,
 ) -> float | None:
-    """解析本步目標 SOC（0–1）；auto／manual 空白＝HOLD。"""
-    mode = (mode or "auto").lower()
-
-    if mode == "manual" and tou_schedule and season and day_key is not None and slot is not None:
-        row = ((tou_schedule.get(season) or {}).get(day_key)) or []
-        if 0 <= int(slot) < len(row):
-            cell = row[int(slot)]
-            if _manual_cell_hold(cell):
-                return HOLD
-            return _as_soc01(cell, 0.0)
+    """讀 schedule 單格目標 SOC（0–1）；空白＝HOLD。"""
+    if not tou_schedule or season is None or day_key is None or slot is None:
         return HOLD
-
-    if mode == "auto":
-        return auto_target_soc(
-            season=season,
-            period=period,
-            prices=prices,
-            energy_price=energy_price,
-            charge_eff=charge_eff,
-            next_period_name=next_period_name,
-        )
-
-    return HOLD
+    row = ((tou_schedule.get(season) or {}).get(day_key)) or []
+    if not (0 <= int(slot) < len(row)):
+        return HOLD
+    cell = row[int(slot)]
+    if _cell_hold(cell):
+        return HOLD
+    return _as_soc01(cell, 0.0)
 
 
 def desired_ess_kw(
@@ -252,92 +387,42 @@ def intent(
     soc: float,
     e_nom_kwh: float,
     charge_eff: float,
-    mode: str = "auto",
-    period: str | None = None,
     season: str | None = None,
+    date=None,
     timestamp=None,
     is_holiday: bool = False,
     step_minutes: int = 60,
     data_min: int | None = None,
-    hour: float | int | None = None,
     tou_schedule: dict | None = None,
-    prices: dict | None = None,
-    energy_price: float | None = None,
     dt_h: float | None = None,
-    period_schedule: dict | None = None,
-    tou_type: str | None = None,
 ) -> dict[str, float | str | None]:
-    """一步 TOU 軟意圖：目標 SOC + desired ess_kw。"""
+    """一步 TOU 軟意圖：只追蹤 schedule 目標 SOC。"""
     day_key = None
     slot = None
-    if timestamp is not None:
-        day_key = schedule_day_key(timestamp, is_holiday=is_holiday)
-    elif is_holiday:
+    if is_holiday:
         day_key = "sunday"
+    elif date is not None:
+        day_key = schedule_day_key(date)
+    elif timestamp is not None:
+        from app.services.cleaning.formats.tpc import interval_date
+
+        day_key = schedule_day_key(interval_date(timestamp))
     if timestamp is not None or data_min is not None:
         slot = slot_index(timestamp, step_minutes=step_minutes, data_min=data_min)
 
-    nxt = None
-    h = row_hour(hour=hour, data_min=data_min, timestamp=timestamp)
-    if (
-        (mode or "auto").lower() == "auto"
-        and season
-        and day_key
-        and h is not None
-        and period_schedule
-        and tou_type
-    ):
-        nxt = next_period(
-            period_schedule,
-            tou_type,
-            season=str(season),
-            day_key=str(day_key),
-            hour=h,
-        )
-
     tgt = target_soc(
-        mode=mode,
-        period=period,
         season=season,
         day_key=day_key,
         slot=slot,
         tou_schedule=tou_schedule,
-        prices=prices,
-        energy_price=energy_price,
-        charge_eff=charge_eff,
-        next_period_name=nxt,
     )
     if tgt is HOLD:
-        ess = 0.0
-        tgt_out = float(soc)
-    else:
-        ess = desired_ess_kw(
-            soc=soc,
-            target=float(tgt),
-            e_nom_kwh=e_nom_kwh,
-            charge_eff=charge_eff,
-            dt_h=dt_h,
-        )
-        tgt_out = float(tgt)
-    return {"target_soc": tgt_out, "desired_ess_kw": ess, "mode": (mode or "auto").lower()}
-
-
-def ration_peak_discharge(
-    desired: float,
-    *,
-    soc: float,
-    soc_min: float,
-    e_nom_kwh: float,
-    charge_eff: float,
-    remaining_peak_steps: int,
-) -> float:
-    """剩餘尖峰均分放電上限（ess 為負）。"""
-    if desired >= 0 or remaining_peak_steps <= 0 or e_nom_kwh <= 0:
-        return desired
-    dt = hours_per_data_row()
-    eta = float(charge_eff)
-    room = max(0.0, float(soc) - float(soc_min))
-    if room <= 0 or dt <= 0 or eta <= 0:
-        return desired
-    max_kw = (room * e_nom_kwh * eta) / dt / max(1, int(remaining_peak_steps))
-    return max(float(desired), -max_kw)
+        return {"target_soc": float(soc), "desired_ess_kw": 0.0}
+    ess = desired_ess_kw(
+        soc=soc,
+        target=float(tgt),
+        e_nom_kwh=e_nom_kwh,
+        charge_eff=charge_eff,
+        dt_h=dt_h,
+    )
+    return {"target_soc": float(tgt), "desired_ess_kw": ess}

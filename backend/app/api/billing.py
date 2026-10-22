@@ -6,6 +6,7 @@ from fastapi import APIRouter, Form, HTTPException
 
 from app.api import parse_json_form
 from app.services.billing import calc_full_bill
+from app.services.import_cache import bill_fingerprint
 from app.services.import_store import ImportNotFound, get
 from app.services.tariff import select_plan
 
@@ -29,7 +30,6 @@ def _prepare_billing(
     schedule_obj = parse_json_form(schedule, None)
     holidays_obj = parse_json_form(holidays, None)
     stored = get(import_id)
-    df = stored.df.copy()
     plan = select_plan(
         stored.voltage_level,
         stored.tou_type,
@@ -38,10 +38,13 @@ def _prepare_billing(
         holidays=holidays_obj,
     )
     return (
-        df,
+        stored,
         plan,
         contracts_obj,
         rules_obj,
+        rates_obj,
+        schedule_obj,
+        holidays_obj,
         stored.voltage_level,
         stored.tou_type,
         stored.start_date,
@@ -58,20 +61,42 @@ async def api_billing_basic(
     holidays: str | None = Form(None),
     overage_rules: str | None = Form(None),
 ):
-    """已匯入序列 + 契約 → basic、overage、energy。"""
+    """已匯入序列 + 契約 → basic、overage、energy（參數指紋快取）。"""
     try:
-        df, plan, contracts_obj, rules_obj, voltage_level, tou_type, start_date, end_date = (
-            _prepare_billing(
-                import_id,
-                contracts=contracts,
-                rates=rates,
-                schedule=schedule,
-                holidays=holidays,
-                overage_rules=overage_rules,
-            )
+        (
+            stored,
+            plan,
+            contracts_obj,
+            rules_obj,
+            rates_obj,
+            schedule_obj,
+            holidays_obj,
+            voltage_level,
+            tou_type,
+            start_date,
+            end_date,
+        ) = _prepare_billing(
+            import_id,
+            contracts=contracts,
+            rates=rates,
+            schedule=schedule,
+            holidays=holidays,
+            overage_rules=overage_rules,
         )
-        return calc_full_bill(
-            df,
+        key = bill_fingerprint(
+            tou_type=tou_type,
+            contracts=contracts_obj,
+            rates=rates_obj,
+            schedule=schedule_obj,
+            holidays=holidays_obj,
+            overage_rules=rules_obj,
+        )
+        hit = stored.caches.get(key)
+        if isinstance(hit, dict) and "total" in hit:
+            return hit
+
+        result = calc_full_bill(
+            stored.df,
             plan,
             contracts_obj,
             tou_type=tou_type,
@@ -80,6 +105,8 @@ async def api_billing_basic(
             voltage_level=voltage_level,
             overage_rules=rules_obj,
         )
+        stored.caches[key] = result
+        return result
     except ImportNotFound as e:
         raise HTTPException(404, "import not found") from e
     except (ValueError, KeyError, TypeError, json.JSONDecodeError) as e:
