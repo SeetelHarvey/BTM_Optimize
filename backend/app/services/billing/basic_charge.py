@@ -11,7 +11,7 @@ from app.services.billing.demand import (
     iter_billing_months,
     monthly_peak_by_period,
 )
-from app.services.contracts import ContractCapacity, calc_basic_charge_lines, money, validate
+from app.services.contract_rules import ContractCapacity, calc_basic_charge_lines, money, validate
 
 
 def _full_month_basic(

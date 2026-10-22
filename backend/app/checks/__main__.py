@@ -6,9 +6,10 @@ import sys
 _MODULES = (
     "app.checks.device",
     "app.checks.dispatch",
-    "app.checks.feature_demand",
+    "app.checks.feature_grid_cap",
     "app.checks.feature_tou",
     "app.checks.feature_reserve",
+    "app.checks.cache_contract",
     "app.checks.calc_full_bill",
     "app.checks.simulate_defaults",
     "app.checks.simulate_size",

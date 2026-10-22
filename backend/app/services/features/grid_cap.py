@@ -1,10 +1,11 @@
 """契約容量削峰：併網硬上限 + 削峰軟意圖。"""
 
+import math
 from typing import Any
 
 from app.services.billing.demand import bill_mode
 from app.services.billing.overage import overage_ceiling
-from app.services.contracts import ContractCapacity
+from app.services.contract_rules import ContractCapacity
 from app.services.quantize import ceil_to_step
 
 
@@ -36,25 +37,42 @@ def suggested_buffer_kw(contract_kw: float, settings: dict) -> float:
     return ceil_to_step(raw)
 
 
+def _quantize_buffer(v: float) -> float:
+    """向遠離 0 取 10 的倍數（保留正負號）。"""
+    if v == 0:
+        return 0.0
+    return math.copysign(ceil_to_step(abs(v)), v)
+
+
 def resolve_buffer_kw(
     settings: dict,
     *,
     contract_kw: float = 0.0,
     key: str = "demandBufferKw",
 ) -> float:
-    """使用者填寫的 kW 優先（向上取 10）；缺欄才用契約×比例建議值。"""
+    """使用者填寫的 kW 優先；缺欄才用契約×比例建議值。
+
+    demandBufferKw 可為負（運行上限可高於契約）；勾 demand 時夾到 ≥0。
+    antiExportKw 一律 ≥0。
+    """
     if key in settings and settings.get(key) is not None and settings.get(key) != "":
-        return ceil_to_step(max(0.0, float(settings[key])))
+        raw = float(settings[key])
+        if key != "demandBufferKw":
+            return ceil_to_step(max(0.0, raw))
+        stepped = _quantize_buffer(raw)
+        if "demand" in (settings.get("functions") or []):
+            return max(0.0, stepped)
+        return stepped
     return suggested_buffer_kw(contract_kw, settings)
 
 
 def seed_buffer_kw(settings: dict, *, contract_kw: float = 0.0) -> float:
-    """選量體／契約調整用的防超約預留。"""
+    """選量體／契約調整用的運行裕度。"""
     return resolve_buffer_kw(settings, contract_kw=contract_kw, key="demandBufferKw")
 
 
 def scaled_buffer_kw(contract_kw: float, settings: dict) -> float:
-    """防超約預留 kW（契約×比例或使用者 demandBufferKw）。"""
+    """運行裕度 kW（契約×比例或使用者 demandBufferKw）。"""
     return resolve_buffer_kw(settings, contract_kw=contract_kw, key="demandBufferKw")
 
 

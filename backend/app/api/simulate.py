@@ -18,21 +18,27 @@ from app.services.bess.run import (
     run_sample,
     run_sample_from_profile_cache,
     functions_without_reserve,
-    run_size_stage1,
-    run_size_stage2,
-    stage1_target_row,
+    run_capacity,
+    run_contract,
+    run_reserve,
+    capacity_target_row,
 )
 from app.services.import_cache import (
     compare_bill_fingerprint,
     final_bundle_fingerprint,
-    stage2_fingerprint,
+    capacity_fingerprint,
+    contract_fingerprint,
+    reserve_fingerprint,
     plan_fingerprint,
     profile_fingerprint,
     sample_fingerprint,
-    stage1_fingerprint,
 )
-from app.services.bess.size_grid import normalize_energy_seeds, normalize_sizing_strategies
-from app.services.features.demand import seed_buffer_kw
+from app.services.bess.size_grid import (
+    contract_sizing_open,
+    normalize_energy_seeds,
+    normalize_sizing_strategies,
+)
+from app.services.features.grid_cap import seed_buffer_kw
 from app.services.import_store import ImportNotFound, get, get_final_bundle, put_final_bundle
 from app.services.tariff import annotate, apply_energy_prices, select_plan
 
@@ -68,7 +74,7 @@ def _store_final_bundle(
         return None
     pcs = float(bundle["pcs_kw"])
     batt = float(bundle["batt_kwh"])
-    scheme = bundle.get("scheme_contracts") or contracts_obj
+    scheme = bundle.get("adopted_contracts") or contracts_obj
     fns = list(functions or sim_obj.get("functions") or ["tou"])
     fk = final_bundle_fingerprint(
         plan_key=plan_key,
@@ -76,7 +82,7 @@ def _store_final_bundle(
         simulate=sim_obj,
         pcs_kw=pcs,
         batt_kwh=batt,
-        scheme_contracts=scheme,
+        adopted_contracts=scheme,
         functions=fns,
     )
     put_final_bundle(stored.caches, fk, bundle)
@@ -91,11 +97,11 @@ def _lookup_final_bundle(
     sim_obj: dict[str, Any],
     pcs_kw: float,
     batt_kwh: float,
-    scheme_contracts: dict[str, Any] | None = None,
+    adopted_contracts: dict[str, Any] | None = None,
     functions: list[str] | None = None,
 ) -> tuple[str, dict[str, Any] | None]:
     """依最終口徑取工作表 bundle。"""
-    scheme = scheme_contracts if scheme_contracts is not None else contracts_obj
+    scheme = adopted_contracts if adopted_contracts is not None else contracts_obj
     fns = list(functions or sim_obj.get("functions") or ["tou"])
     fk = final_bundle_fingerprint(
         plan_key=plan_key,
@@ -103,7 +109,7 @@ def _lookup_final_bundle(
         simulate=sim_obj,
         pcs_kw=pcs_kw,
         batt_kwh=batt_kwh,
-        scheme_contracts=scheme,
+        adopted_contracts=scheme,
         functions=fns,
     )
     return fk, get_final_bundle(stored.caches, fk)
@@ -122,6 +128,7 @@ def _profile_sample_keys(
         ),
         charge_eff=float(sim_obj.get("chargeEff") or 0.85),
         include_half_peak=sim_obj.get("includeHalfPeak"),
+        ignore_off_peak=contract_sizing_open(sim_obj),
     )
     tiers = normalize_sizing_strategies(sim_obj.get("sizingStrategies"))
     ekeys = normalize_energy_seeds(sim_obj.get("sizingEnergySeeds"))
@@ -186,11 +193,6 @@ def _prepare_simulate(
     sim_obj = parse_json_form(simulate, None)
     if not isinstance(sim_obj, dict):
         raise ValueError("simulate must be a JSON object")
-    # 用電大戶：經常契約 < 5MW 不可勾；本輪義務調度未完成，僅作資格保護
-    fns = list(sim_obj.get("functions") or [])
-    regular = float(contracts_obj.get("regular_kw") or 0)
-    if "large_user" in fns and regular < 5000:
-        sim_obj = {**sim_obj, "functions": [f for f in fns if f != "large_user"]}
     if "reserve" in (sim_obj.get("functions") or []):
         from app.services.features import reserve as reserve_feat
 
@@ -274,7 +276,7 @@ async def api_simulate_sample(
     holidays: str | None = Form(None),
     baseline_contracts: str | None = Form(None),
 ):
-    """試算前負載樣本／配置點數預覽（先於 /stage1）。"""
+    """試算前負載樣本／配置點數預覽（先於 /capacity）。"""
     try:
         (
             stored,
@@ -332,8 +334,130 @@ async def api_simulate_sample(
         raise HTTPException(400, str(e)) from e
 
 
-@router.post("/stage1")
-async def api_simulate_stage1(
+def _effective_overage_rules(raw: str | None, settings: dict) -> dict | None:
+    """統一取得表單或試算設定中的超約規則。"""
+    parsed = parse_json_form(raw, None)
+    if parsed is not None:
+        return parsed
+    value = settings.get("overageRules")
+    return value if isinstance(value, dict) else None
+
+
+def _followup_common(
+    *,
+    import_id: str,
+    contracts: str,
+    simulate: str,
+    capacity_key: str,
+    rates: str | None,
+    schedule: str | None,
+    holidays: str | None,
+    overage_rules: str | None,
+    baseline_contracts: str | None,
+    pcs_kw: str | None,
+    batt_kwh: str | None,
+):
+    """capacity 快取＋目標量體；不符回 409。"""
+    (
+        stored,
+        df,
+        plan,
+        contracts_obj,
+        sim_obj,
+        simulate_tou,
+        schedule_obj,
+        _holidays,
+        plan_key,
+        baseline_contracts_obj,
+        baseline_tou,
+        baseline_plan,
+        baseline_df,
+    ) = _prepare_simulate(
+        import_id,
+        contracts,
+        simulate,
+        rates=rates,
+        schedule=schedule,
+        holidays=holidays,
+        baseline_contracts=baseline_contracts,
+    )
+    rules_obj = _effective_overage_rules(overage_rules, sim_obj)
+    sim_cache = {
+        **sim_obj,
+        "_baseline_tou": baseline_tou,
+        "_baseline_contracts": baseline_contracts_obj,
+    }
+    expected = capacity_fingerprint(
+        plan_key=plan_key,
+        contracts=contracts_obj,
+        simulate=sim_cache,
+        overage_rules=rules_obj,
+    )
+    if capacity_key != expected:
+        raise HTTPException(409, "請重新試算")
+    capacity = stored.caches.get(capacity_key)
+    if not isinstance(capacity, dict) or "grid" not in capacity:
+        raise HTTPException(409, "請重新試算")
+
+    target_pcs = float(pcs_kw) if pcs_kw not in (None, "") else None
+    target_batt = float(batt_kwh) if batt_kwh not in (None, "") else None
+    if (target_pcs is None) ^ (target_batt is None):
+        raise HTTPException(400, "pcs_kw 與 batt_kwh 需同時提供")
+    target = capacity_target_row(capacity, target_pcs, target_batt)
+    if target is None:
+        raise HTTPException(400, "目標量體不在試算結果中")
+    return {
+        "stored": stored,
+        "df": df,
+        "plan": plan,
+        "contracts_obj": contracts_obj,
+        "sim_obj": sim_obj,
+        "simulate_tou": simulate_tou,
+        "schedule_obj": schedule_obj,
+        "plan_key": plan_key,
+        "baseline_contracts_obj": baseline_contracts_obj,
+        "baseline_tou": baseline_tou,
+        "baseline_plan": baseline_plan,
+        "baseline_df": baseline_df,
+        "rules_obj": rules_obj,
+        "sim_cache": sim_cache,
+        "capacity": capacity,
+        "capacity_key": capacity_key,
+        "target_pcs": float(target["pcs_kw"]),
+        "target_batt": float(target["batt_kwh"]),
+    }
+
+
+async def _store_followup_bundle(stored, plan_key, contracts_obj, sim_obj, result):
+    final_bundle = result.get("_final_bundle")
+    point_key = ""
+    if isinstance(final_bundle, dict):
+        point_key = (
+            f"{float(final_bundle.get('pcs_kw') or 0):g}_"
+            f"{float(final_bundle.get('batt_kwh') or 0):g}"
+        )
+    evaluation = (result.get("resultByPoint") or {}).get(point_key) or {}
+    final = evaluation.get("final") or {}
+    adopted = final.get("adopted_contracts") or contracts_obj
+    fns = list(result.get("functions") or sim_obj.get("functions") or ["tou"])
+    if final.get("warning") == "reserve_no_net_gain" or (
+        final.get("reserve_meta") or {}
+    ).get("rolled_back"):
+        fns = functions_without_reserve(fns)
+    if final_bundle is not None:
+        _store_final_bundle(
+            stored,
+            plan_key=plan_key,
+            contracts_obj=contracts_obj,
+            sim_obj=sim_obj,
+            bundle=final_bundle,
+            functions=fns,
+        )
+    return adopted
+
+
+@router.post("/capacity")
+async def api_simulate_capacity(
     import_id: str = Form(...),
     contracts: str = Form(...),
     simulate: str = Form(...),
@@ -343,7 +467,7 @@ async def api_simulate_stage1(
     overage_rules: str | None = Form(None),
     baseline_contracts: str | None = Form(None),
 ):
-    """已匯入負載 + 試算參數 → 建議 PCS／Battery（電價調度）。"""
+    """決定容量：選 pcs／kWh 並跑時間電價調度。"""
     try:
         (
             stored,
@@ -374,13 +498,13 @@ async def api_simulate_stage1(
             "_baseline_tou": baseline_tou,
             "_baseline_contracts": baseline_contracts_obj,
         }
-        s1_key = stage1_fingerprint(
+        cap_key = capacity_fingerprint(
             plan_key=plan_key,
             contracts=contracts_obj,
             simulate=sim_cache,
             overage_rules=rules_obj,
         )
-        hit = stored.caches.get(s1_key)
+        hit = stored.caches.get(cap_key)
         if isinstance(hit, dict) and "grid" in hit:
             return _strip_internal_bundles(hit)
 
@@ -391,7 +515,7 @@ async def api_simulate_stage1(
         cached_profile = prof if isinstance(prof, dict) else None
 
         result = await asyncio.to_thread(
-            run_size_stage1,
+            run_capacity,
             df,
             plan,
             contracts_obj,
@@ -421,21 +545,24 @@ async def api_simulate_stage1(
                 bundle=final_bundle,
                 functions=sizing_fns,
             )
-        result = {**_strip_internal_bundles(result), "stage1_key": s1_key}
-        stored.caches[s1_key] = result
-        return result
+        cached_result = {
+            **result,
+            "capacity_key": cap_key,
+        }
+        stored.caches[cap_key] = cached_result
+        return _strip_internal_bundles(cached_result)
     except ImportNotFound as e:
         raise HTTPException(404, "import not found") from e
     except (ValueError, KeyError, TypeError, json.JSONDecodeError) as e:
         raise HTTPException(400, str(e)) from e
 
 
-@router.post("/stage2")
-async def api_simulate_stage2(
+@router.post("/contract")
+async def api_simulate_contract(
     import_id: str = Form(...),
     contracts: str = Form(...),
     simulate: str = Form(...),
-    stage1_key: str = Form(...),
+    capacity_key: str = Form(...),
     rates: str | None = Form(None),
     schedule: str | None = Form(None),
     holidays: str | None = Form(None),
@@ -444,118 +571,181 @@ async def api_simulate_stage2(
     pcs_kw: str | None = Form(None),
     batt_kwh: str | None = Form(None),
 ):
-    """契約／備轉合併重算（綁定 stage1_key 與目標量體；不符回 409）。"""
+    """自動契約（綁定 capacity_key＋目標量體）。"""
     try:
-        (
-            stored,
-            df,
-            plan,
-            contracts_obj,
-            sim_obj,
-            simulate_tou,
-            schedule_obj,
-            _holidays,
-            plan_key,
-            baseline_contracts_obj,
-            baseline_tou,
-            _baseline_plan,
-            baseline_df,
-        ) = _prepare_simulate(
-            import_id,
-            contracts,
-            simulate,
+        ctx = _followup_common(
+            import_id=import_id,
+            contracts=contracts,
+            simulate=simulate,
+            capacity_key=capacity_key,
             rates=rates,
             schedule=schedule,
             holidays=holidays,
+            overage_rules=overage_rules,
             baseline_contracts=baseline_contracts,
+            pcs_kw=pcs_kw,
+            batt_kwh=batt_kwh,
         )
-        rules_obj = parse_json_form(overage_rules, None)
-        sim_cache = {
-            **sim_obj,
-            "_baseline_tou": baseline_tou,
-            "_baseline_contracts": baseline_contracts_obj,
-        }
-        expected = stage1_fingerprint(
-            plan_key=plan_key,
-            contracts=contracts_obj,
-            simulate=sim_cache,
-            overage_rules=rules_obj,
+        ck = contract_fingerprint(
+            capacity_key=ctx["capacity_key"],
+            simulate=ctx["sim_cache"],
+            overage_rules=ctx["rules_obj"],
+            pcs_kw=ctx["target_pcs"],
+            batt_kwh=ctx["target_batt"],
         )
-        if stage1_key != expected:
-            raise HTTPException(409, "請重新試算")
-        stage1 = stored.caches.get(stage1_key)
-        if not isinstance(stage1, dict) or "grid" not in stage1:
-            raise HTTPException(409, "請重新試算")
-
-        target_pcs = float(pcs_kw) if pcs_kw not in (None, "") else None
-        target_batt = float(batt_kwh) if batt_kwh not in (None, "") else None
-        if (target_pcs is None) ^ (target_batt is None):
-            raise HTTPException(400, "pcs_kw 與 batt_kwh 需同時提供")
-        target = stage1_target_row(stage1, target_pcs, target_batt)
-        if target is None:
-            raise HTTPException(400, "目標量體不在試算結果中")
-        target_pcs = float(target["pcs_kw"])
-        target_batt = float(target["batt_kwh"])
-
-        stage2_key = stage2_fingerprint(
-            stage1_key=stage1_key,
-            simulate=sim_cache,
-            overage_rules=rules_obj,
-            pcs_kw=target_pcs,
-            batt_kwh=target_batt,
-        )
-        hit = stored.caches.get(stage2_key)
+        hit = ctx["stored"].caches.get(ck)
         if isinstance(hit, dict) and "grid" in hit:
             return _strip_internal_bundles(hit)
 
-        if not stage1.get("need_stage2"):
-            result = {**stage1, "stage1_key": stage1_key, "need_stage2": False}
-            stored.caches[stage2_key] = _strip_internal_bundles(result)
-            return stored.caches[stage2_key]
+        if "demand" not in (ctx["sim_obj"].get("functions") or []):
+            result = {
+                **ctx["capacity"],
+                "capacity_key": ctx["capacity_key"],
+                "contract_key": ck,
+            }
+            ctx["stored"].caches[ck] = _strip_internal_bundles(result)
+            return ctx["stored"].caches[ck]
 
         result = await asyncio.to_thread(
-            run_size_stage2,
-            stage1,
-            df,
-            plan,
-            contracts_obj,
-            sim_obj,
-            tou_type=simulate_tou,
-            start_date=stored.start_date,
-            end_date=stored.end_date,
-            voltage_level=stored.voltage_level,
-            schedule=schedule_obj,
-            overage_rules=rules_obj,
-            baseline_tou_type=baseline_tou,
-            baseline_df=baseline_df,
-            baseline_contracts=baseline_contracts_obj,
-            baseline_plan=_baseline_plan,
-            pcs_kw=target_pcs,
-            batt_kwh=target_batt,
+            run_contract,
+            ctx["capacity"],
+            ctx["df"],
+            ctx["plan"],
+            ctx["contracts_obj"],
+            ctx["sim_obj"],
+            tou_type=ctx["simulate_tou"],
+            start_date=ctx["stored"].start_date,
+            end_date=ctx["stored"].end_date,
+            voltage_level=ctx["stored"].voltage_level,
+            schedule=ctx["schedule_obj"],
+            overage_rules=ctx["rules_obj"],
+            baseline_tou_type=ctx["baseline_tou"],
+            baseline_df=ctx["baseline_df"],
+            baseline_contracts=ctx["baseline_contracts_obj"],
+            baseline_plan=ctx["baseline_plan"],
+            pcs_kw=ctx["target_pcs"],
+            batt_kwh=ctx["target_batt"],
         )
-        final_bundle = result.get("_final_bundle")
-        final = (result.get("stage2") or {}).get("final") or result.get("final")
-        adopted = (final or {}).get("stage2_contracts") or contracts_obj
-        stage2_fns = list(result.get("functions") or sim_obj.get("functions") or ["tou"])
-        # rollback 備轉時功能集合不含 reserve（物化時已用 stage1_settings）
-        if (final or {}).get("stage2_warning") == "reserve_no_net_gain" or (
-            (final or {}).get("reserve_meta") or {}
-        ).get("rolled_back"):
-            stage2_fns = functions_without_reserve(stage2_fns)
-        if final_bundle is not None:
-            _store_final_bundle(
-                stored,
-                plan_key=plan_key,
-                contracts_obj=contracts_obj,
-                sim_obj=sim_obj,
-                bundle=final_bundle,
-                functions=stage2_fns,
+        await _store_followup_bundle(
+            ctx["stored"], ctx["plan_key"], ctx["contracts_obj"], ctx["sim_obj"], result
+        )
+        cached_result = {
+            **result,
+            "capacity_key": ctx["capacity_key"],
+            "contract_key": ck,
+        }
+        ctx["stored"].caches[ck] = cached_result
+        return _strip_internal_bundles(cached_result)
+    except HTTPException:
+        raise
+    except ImportNotFound as e:
+        raise HTTPException(404, "import not found") from e
+    except (ValueError, KeyError, TypeError, json.JSONDecodeError) as e:
+        raise HTTPException(400, str(e)) from e
+
+
+@router.post("/reserve")
+async def api_simulate_reserve(
+    import_id: str = Form(...),
+    contracts: str = Form(...),
+    simulate: str = Form(...),
+    capacity_key: str = Form(...),
+    rates: str | None = Form(None),
+    schedule: str | None = Form(None),
+    holidays: str | None = Form(None),
+    overage_rules: str | None = Form(None),
+    baseline_contracts: str | None = Form(None),
+    pcs_kw: str | None = Form(None),
+    batt_kwh: str | None = Form(None),
+    contract_key: str | None = Form(None),
+):
+    """即時備轉結算（綁定 capacity；有契約則用 contract_key 上游）。"""
+    try:
+        ctx = _followup_common(
+            import_id=import_id,
+            contracts=contracts,
+            simulate=simulate,
+            capacity_key=capacity_key,
+            rates=rates,
+            schedule=schedule,
+            holidays=holidays,
+            overage_rules=overage_rules,
+            baseline_contracts=baseline_contracts,
+            pcs_kw=pcs_kw,
+            batt_kwh=batt_kwh,
+        )
+        upstream = ctx["capacity"]
+        upstream_key = ctx["capacity_key"]
+        if contract_key:
+            expected_contract_key = contract_fingerprint(
+                capacity_key=ctx["capacity_key"],
+                simulate=ctx["sim_cache"],
+                overage_rules=ctx["rules_obj"],
+                pcs_kw=ctx["target_pcs"],
+                batt_kwh=ctx["target_batt"],
             )
-        result = {**_strip_internal_bundles(result), "stage1_key": stage1_key}
-        if adopted:
-            result["scheme_contracts"] = adopted
-        stored.caches[stage2_key] = result
-        return result
+            if contract_key != expected_contract_key:
+                raise HTTPException(409, "契約結果已過期，請重新執行契約容量試算")
+            hit_c = ctx["stored"].caches.get(contract_key)
+            if not isinstance(hit_c, dict) or "grid" not in hit_c:
+                raise HTTPException(409, "契約結果已過期，請重新執行契約容量試算")
+            upstream = hit_c
+            upstream_key = contract_key
+
+        rk = reserve_fingerprint(
+            upstream_key=upstream_key,
+            simulate=ctx["sim_cache"],
+            overage_rules=ctx["rules_obj"],
+            pcs_kw=ctx["target_pcs"],
+            batt_kwh=ctx["target_batt"],
+        )
+        hit = ctx["stored"].caches.get(rk)
+        if isinstance(hit, dict) and "grid" in hit:
+            return _strip_internal_bundles(hit)
+
+        if "reserve" not in (ctx["sim_obj"].get("functions") or []):
+            result = {
+                **upstream,
+                "capacity_key": ctx["capacity_key"],
+                "reserve_key": rk,
+            }
+            if contract_key:
+                result["contract_key"] = contract_key
+            ctx["stored"].caches[rk] = _strip_internal_bundles(result)
+            return ctx["stored"].caches[rk]
+
+        result = await asyncio.to_thread(
+            run_reserve,
+            upstream,
+            ctx["df"],
+            ctx["plan"],
+            ctx["contracts_obj"],
+            ctx["sim_obj"],
+            tou_type=ctx["simulate_tou"],
+            start_date=ctx["stored"].start_date,
+            end_date=ctx["stored"].end_date,
+            voltage_level=ctx["stored"].voltage_level,
+            schedule=ctx["schedule_obj"],
+            overage_rules=ctx["rules_obj"],
+            baseline_tou_type=ctx["baseline_tou"],
+            baseline_df=ctx["baseline_df"],
+            baseline_contracts=ctx["baseline_contracts_obj"],
+            baseline_plan=ctx["baseline_plan"],
+            pcs_kw=ctx["target_pcs"],
+            batt_kwh=ctx["target_batt"],
+        )
+        await _store_followup_bundle(
+            ctx["stored"], ctx["plan_key"], ctx["contracts_obj"], ctx["sim_obj"], result
+        )
+        cached_result = {
+            **result,
+            "capacity_key": ctx["capacity_key"],
+            "reserve_key": rk,
+        }
+        if contract_key:
+            cached_result["contract_key"] = contract_key
+        ctx["stored"].caches[rk] = cached_result
+        return _strip_internal_bundles(cached_result)
     except HTTPException:
         raise
     except ImportNotFound as e:
@@ -574,8 +764,9 @@ async def api_simulate_dispatch_charts(
     rates: str | None = Form(None),
     schedule: str | None = Form(None),
     holidays: str | None = Form(None),
+    overage_rules: str | None = Form(None),
     baseline_contracts: str | None = Form(None),
-    scheme_contracts: str | None = Form(None),
+    adopted_contracts: str | None = Form(None),
 ):
     """已匯入負載 + (pcs,batt) → 調度圖（優先讀最終工作表）。"""
     try:
@@ -589,9 +780,9 @@ async def api_simulate_dispatch_charts(
             schedule_obj,
             _holidays,
             plan_key,
-            _baseline_contracts_obj,
-            _baseline_tou,
-            _baseline_plan,
+            baseline_contracts_obj,
+            baseline_tou,
+            baseline_plan,
             baseline_df,
         ) = _prepare_simulate(
             import_id,
@@ -604,7 +795,10 @@ async def api_simulate_dispatch_charts(
         )
         if pcs_kw <= 0 or batt_kwh <= 0:
             raise ValueError("pcs_kw and batt_kwh must be positive")
-        scheme_raw = parse_json_form(scheme_contracts, None) if scheme_contracts else None
+        rules_obj = _effective_overage_rules(overage_rules, sim_obj)
+        if rules_obj is not None:
+            sim_obj["overageRules"] = rules_obj
+        scheme_raw = parse_json_form(adopted_contracts, None) if adopted_contracts else None
         scheme_obj = scheme_raw if isinstance(scheme_raw, dict) else None
         # 有採用契約＝最終層（含契約／備轉）；否則僅儲能功能集合
         if scheme_obj is not None:
@@ -618,7 +812,7 @@ async def api_simulate_dispatch_charts(
             sim_obj=sim_obj,
             pcs_kw=pcs_kw,
             batt_kwh=batt_kwh,
-            scheme_contracts=scheme_obj,
+            adopted_contracts=scheme_obj,
             functions=fns,
         )
         if bundle is not None:
@@ -645,12 +839,12 @@ async def api_simulate_dispatch_charts(
             end_date=str(stored.end_date),
             voltage_level=str(stored.voltage_level),
             period_schedule=schedule_obj,
-            overage_rules=sim_obj.get("overageRules")
-            if isinstance(sim_obj.get("overageRules"), dict)
-            else None,
+            overage_rules=rules_obj,
             baseline_df=baseline_df,
-            baseline_tou=_baseline_tou,
-            scheme_contracts=scheme_obj or contracts_obj,
+            baseline_tou=baseline_tou,
+            baseline_contracts=baseline_contracts_obj,
+            baseline_plan=baseline_plan,
+            adopted_contracts=scheme_obj or contracts_obj,
         )
         _store_final_bundle(
             stored,
@@ -685,8 +879,9 @@ async def api_simulate_compare_bill(
     rates: str | None = Form(None),
     schedule: str | None = Form(None),
     holidays: str | None = Form(None),
+    overage_rules: str | None = Form(None),
     baseline_contracts: str | None = Form(None),
-    scheme_contracts: str | None = Form(None),
+    adopted_contracts: str | None = Form(None),
 ):
     """原始 vs 新方案完整電費（months／summary，同電費試算口徑）。"""
     try:
@@ -715,7 +910,10 @@ async def api_simulate_compare_bill(
         )
         if pcs_kw <= 0 or batt_kwh <= 0:
             raise ValueError("pcs_kw and batt_kwh must be positive")
-        scheme_raw = parse_json_form(scheme_contracts, None) if scheme_contracts else None
+        rules_obj = _effective_overage_rules(overage_rules, sim_obj)
+        if rules_obj is not None:
+            sim_obj["overageRules"] = rules_obj
+        scheme_raw = parse_json_form(adopted_contracts, None) if adopted_contracts else None
         scheme_obj = scheme_raw if isinstance(scheme_raw, dict) else None
         if scheme_obj is not None:
             fns = list(sim_obj.get("functions") or ["tou"])
@@ -728,7 +926,7 @@ async def api_simulate_compare_bill(
             sim_obj=sim_obj,
             pcs_kw=pcs_kw,
             batt_kwh=batt_kwh,
-            scheme_contracts=scheme_obj,
+            adopted_contracts=scheme_obj,
             functions=fns,
         )
         if bundle is not None and bundle.get("baseline") is not None and bundle.get("scheme") is not None:
@@ -742,7 +940,7 @@ async def api_simulate_compare_bill(
                     "baseline_tou": baseline_tou,
                     "simulate_tou": simulate_tou,
                     "baseline_contracts": baseline_contracts_obj,
-                    "scheme_contracts": scheme_obj or contracts_obj,
+                    "adopted_contracts": scheme_obj or contracts_obj,
                 },
             }
 
@@ -754,7 +952,7 @@ async def api_simulate_compare_bill(
             batt_kwh=batt_kwh,
             baseline_contracts=baseline_contracts_obj,
             baseline_tou=baseline_tou,
-            scheme_contracts=scheme_obj,
+            adopted_contracts=scheme_obj,
         )
         hit = stored.caches.get(compare_key)
         if isinstance(hit, dict) and hit.get("baseline") is not None and hit.get("scheme") is not None:
@@ -777,7 +975,7 @@ async def api_simulate_compare_bill(
             baseline_contracts=baseline_contracts_obj,
             baseline_tou=baseline_tou,
             baseline_plan=baseline_plan,
-            scheme_contracts=scheme_obj,
+            adopted_contracts=scheme_obj,
             worksheet=bundle.get("worksheet") if bundle else None,
         )
         inner = result.pop("_bundle", None)
@@ -808,8 +1006,9 @@ async def api_simulate_export(
     rates: str | None = Form(None),
     schedule: str | None = Form(None),
     holidays: str | None = Form(None),
+    overage_rules: str | None = Form(None),
     baseline_contracts: str | None = Form(None),
-    scheme_contracts: str | None = Form(None),
+    adopted_contracts: str | None = Form(None),
 ):
     """15 分用電／金額對照表 → xlsx。"""
     try:
@@ -838,7 +1037,10 @@ async def api_simulate_export(
         )
         if pcs_kw <= 0 or batt_kwh <= 0:
             raise ValueError("pcs_kw and batt_kwh must be positive")
-        scheme_raw = parse_json_form(scheme_contracts, None) if scheme_contracts else None
+        rules_obj = _effective_overage_rules(overage_rules, sim_obj)
+        if rules_obj is not None:
+            sim_obj["overageRules"] = rules_obj
+        scheme_raw = parse_json_form(adopted_contracts, None) if adopted_contracts else None
         scheme_obj = scheme_raw if isinstance(scheme_raw, dict) else None
         if scheme_obj is not None:
             fns = list(sim_obj.get("functions") or ["tou"])
@@ -851,7 +1053,7 @@ async def api_simulate_export(
             sim_obj=sim_obj,
             pcs_kw=pcs_kw,
             batt_kwh=batt_kwh,
-            scheme_contracts=scheme_obj,
+            adopted_contracts=scheme_obj,
             functions=fns,
         )
         ws = bundle.get("worksheet") if bundle else None
@@ -870,11 +1072,12 @@ async def api_simulate_export(
                 end_date=str(stored.end_date),
                 voltage_level=str(stored.voltage_level),
                 period_schedule=schedule_obj,
+                overage_rules=rules_obj,
                 baseline_df=baseline_df,
                 baseline_tou=baseline_tou,
                 baseline_contracts=baseline_contracts_obj,
                 baseline_plan=baseline_plan,
-                scheme_contracts=scheme_obj or contracts_obj,
+                adopted_contracts=scheme_obj or contracts_obj,
             )
             _store_final_bundle(
                 stored,
@@ -899,7 +1102,7 @@ async def api_simulate_export(
             baseline_contracts=baseline_contracts_obj,
             baseline_tou=baseline_tou,
             baseline_plan=baseline_plan,
-            scheme_contracts=scheme_obj,
+            adopted_contracts=scheme_obj,
             start_date=str(stored.start_date),
             end_date=str(stored.end_date),
             voltage_level=str(stored.voltage_level),

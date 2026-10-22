@@ -2,7 +2,6 @@
   "simulateTou": "ThreeStage",
   "sizingStrategies": ["p50", "p90", "max", "two_cycle"],
   "sizingEnergySeeds": ["min", "p50", "p90", "max"],
-  "evaluateContractReduction": false,
   "bufferPct": 3,
   "backupReserveKwh": 0,
   "touScheduleMode": "auto",
@@ -11,10 +10,9 @@
   "reservePerformancePrice": 100,
   "reserveEnergyPrice": 4000,
   "reserveMonthlyDispatchCount": 2,
-  "largeUserRatio": 0.1,
-  "largeUserPowerRatio": 0.8,
   "socMin": 0.1,
   "socMax": 0.9,
   "chargeEff": 0.85,
-  "includeHalfPeak": false
+  "includeHalfPeak": false,
+  "sizingFree": false
 }

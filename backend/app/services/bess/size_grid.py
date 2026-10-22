@@ -6,13 +6,21 @@ import pandas as pd
 
 from app.services.billing.demand import bill_mode
 from app.services.billing.overage import overage_ceiling
-from app.services.contracts import ContractCapacity
+from app.services.contract_rules import ContractCapacity
 from app.services.cleaning.formats.tpc import enrich_interval_end
 from app.services.quantize import ceil_to_step
 from app.services.schedule import (
     default_intraday_off_peak_hours,
     intraday_off_peak_hours,
 )
+
+
+def contract_sizing_open(settings: dict | None) -> bool:
+    """勾契約容量或選自由量體時，配置不再用離峰裕度封頂。"""
+    if not settings:
+        return False
+    fns = settings.get("functions") or []
+    return "demand" in fns or bool(settings.get("sizingFree"))
 
 
 ENERGY_SEED_KEYS = ("min", "p50", "p90", "max")
@@ -265,12 +273,13 @@ def _power_pcs_quantiles(
     buffer_kw: float,
     *,
     include_half_peak: bool = False,
+    ignore_off_peak: bool = False,
 ) -> tuple[dict[str, float], dict[str, Any]]:
-    """功率面向 P50／P90：整體 15 分 kW 分位 ∩ 同口徑離峰裕度分位（非月均）。"""
+    """功率面向 P50／P90。契約關閉時與離峰裕度取較小；打開時只用尖峰需量。"""
     kw = _target_kw_series(work, include_half_peak=include_half_peak)
     head = _off_headroom_series(work, cap, tou_type, buffer_kw)
     empty_src = {"kw": {}, "off_headroom": {}, "periods": sorted(_target_load_periods(include_half_peak))}
-    if kw.empty or head.empty:
+    if kw.empty or (head.empty and not ignore_off_peak):
         return {SIZING_TIER_P50: 0.0, SIZING_TIER_P90: 0.0}, empty_src
     qmap = {SIZING_TIER_P50: 0.50, SIZING_TIER_P90: 0.90}
     pcs: dict[str, float] = {}
@@ -278,10 +287,10 @@ def _power_pcs_quantiles(
     off_out: dict[str, float] = {}
     for tid, q in qmap.items():
         a = float(kw.quantile(q))
-        b = float(head.quantile(q))
+        b = float(head.quantile(q)) if not head.empty else 0.0
         kw_out[tid] = round(a, 3)
         off_out[tid] = round(b, 3)
-        raw = min(a, b) if a > 0 and b > 0 else 0.0
+        raw = a if ignore_off_peak else (min(a, b) if a > 0 and b > 0 else 0.0)
         pcs[tid] = ceil_to_step(raw) if raw > 0 else 0.0
     return pcs, {
         "kw": kw_out,
@@ -486,8 +495,9 @@ def _max_cover_pcs(
     buffer_kw: float,
     *,
     include_half_peak: bool = False,
+    ignore_off_peak: bool = False,
 ) -> tuple[float, dict[str, float]]:
-    """全覆蓋 PCS：目標時段最大需量，受該日離峰可充功率限制。"""
+    """全覆蓋 PCS。契約關閉時受該日離峰可充限制；打開時只用尖峰最高需量。"""
     if work.empty or "kW" not in work.columns or "period" not in work.columns:
         return 0.0, {}
     periods = _target_load_periods(include_half_peak)
@@ -502,7 +512,7 @@ def _max_cover_pcs(
     day = pd.Timestamp(work.loc[idx, "date"]).normalize()
     daily_off = _daily_off_headroom_kw(work, cap, tou_type, buffer_kw)
     day_off = float(daily_off.get(day, 0.0)) if len(daily_off) else 0.0
-    pcs = min(max_kw, day_off) if day_off > 0 else 0.0
+    pcs = max_kw if ignore_off_peak else (min(max_kw, day_off) if day_off > 0 else 0.0)
     pcs_out = ceil_to_step(pcs) if pcs > 0 else 0.0
     src = {
         "max_kw": round(max_kw, 3),
@@ -525,8 +535,9 @@ def _energy_shift_seeds(
     soc_min: float,
     soc_max: float,
     charge_eff: float,
+    ignore_off_peak: bool = False,
 ) -> dict[str, Any]:
-    """能量種子 Min／P50／P90／Max：僅尖峰日電量 → batt／PCS（同日回充）。
+    """能量種子 Min／P50／P90／Max：尖峰日電量 → batt。契約關閉時同日充不回就縮小。
 
     半尖峰開關只影響功率種子；此處固定 peak，避免電池被半尖峰電量灌大。
     Min＝尖峰日電量最小值（最輕尖峰日）。
@@ -569,6 +580,24 @@ def _energy_shift_seeds(
         "p90": float(target_kw.quantile(0.90)),
         "max": float(target_kw.max()),
     }
+    if ignore_off_peak:
+        seeds = {}
+        for key in ENERGY_SEED_KEYS:
+            need_ac = max(0.0, levels[key])
+            batt = need_ac / (window * eta) if need_ac > 0 else 0.0
+            pcs = float(kw_pct[key])
+            seeds[key] = {
+                "batt_kwh": ceil_to_step(batt) if batt > 0 else 0.0,
+                "pcs_kw": ceil_to_step(pcs) if pcs > 0 else 0.0,
+                "periods": sorted(periods),
+            }
+        return {
+            "ok": any(float(s.get("pcs_kw") or 0) > 0 for s in seeds.values()),
+            "seeds": seeds,
+            "daily_target_kwh": {k: round(v, 1) for k, v in levels.items()},
+            "periods": sorted(periods),
+            "reason": "ok",
+        }
     head_rows = _off_headroom_series(work, cap, tou_type, buffer_kw)
     if head_rows.empty:
         return {
@@ -643,6 +672,7 @@ def profile_stats(
     include_half_peak: bool | None = None,
     soc_min: float = 0.1,
     soc_max: float = 0.9,
+    ignore_off_peak: bool = False,
 ) -> dict[str, Any]:
     """目標時段／離峰統計；一次算齊半尖峰開／關兩組（切換只比大小）。"""
     cap = (
@@ -686,15 +716,26 @@ def profile_stats(
         soc_min=soc_min,
         soc_max=soc_max,
         charge_eff=charge_eff,
+        ignore_off_peak=ignore_off_peak,
     )
 
     def _branch(include_hp: bool) -> dict[str, Any]:
         q_pcs, _q_src = _power_pcs_quantiles(
-            work, cap, tou_type, buffer_kw, include_half_peak=include_hp
+            work,
+            cap,
+            tou_type,
+            buffer_kw,
+            include_half_peak=include_hp,
+            ignore_off_peak=ignore_off_peak,
         )
         pcs = dict(q_pcs)
         max_kw, max_src = _max_cover_pcs(
-            work, cap, tou_type, buffer_kw, include_half_peak=include_hp
+            work,
+            cap,
+            tou_type,
+            buffer_kw,
+            include_half_peak=include_hp,
+            ignore_off_peak=ignore_off_peak,
         )
         if max_kw > 0:
             pcs[SIZING_TIER_MAX] = ceil_to_step(max_kw)
@@ -912,6 +953,7 @@ def plan_sample_grid(
     include_half_peak: bool | None = None,
     soc_min: float = 0.1,
     soc_max: float = 0.9,
+    ignore_off_peak: bool = False,
 ) -> dict[str, Any]:
     """診斷／策略多選 → 短名單配置（尚未 dispatch）。"""
     cap = (
@@ -931,6 +973,7 @@ def plan_sample_grid(
         include_half_peak=include_half_peak,
         soc_min=soc_min,
         soc_max=soc_max,
+        ignore_off_peak=ignore_off_peak,
     )
     diagnosis = _diagnosis_from_profile(
         df,

@@ -6,7 +6,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from app.services import settings as settings_svc
-from app.services.contracts import all_schemas
+from app.services.contract_rules import all_schemas
 from app.services.tariff import select_plan
 
 router = APIRouter(prefix="/settings", tags=["settings"])
@@ -23,8 +23,8 @@ def get_defaults():
     """電價／時段／假日／超約／模擬參數／TOU 策略預設。"""
     return settings_svc.default_settings()
 
-@router.get("/contracts")
-def get_contracts():
+@router.get("/contract_fields")
+def get_contract_fields():
     """各方案可填的契約欄位。"""
     return all_schemas()
 

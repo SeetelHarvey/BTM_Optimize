@@ -5,7 +5,7 @@ from typing import Any
 import pandas as pd
 
 from app.services.billing.demand import add_calendar_month, iter_billing_months
-from app.services.contracts import money
+from app.services.contract_rules import money
 from app.services.schedule import DATA_INTERVAL_MINUTES, hours_per_data_row
 
 

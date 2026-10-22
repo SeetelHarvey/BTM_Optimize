@@ -29,7 +29,7 @@ from app.services.bess.size_grid import (
     profile_stats,
     shortlist_combinations,
 )
-from app.services.contracts import (
+from app.services.contract_rules import (
     ContractCapacity,
     allowance_kw,
     calc_basic_charge_lines,
@@ -72,6 +72,34 @@ def _df() -> pd.DataFrame:
             rows.append({"timestamp": ts, "kW": load})
     raw = label_periods(pd.DataFrame(rows), ctx)
     return annotate(raw, plan)
+
+
+def _assert_open_contract_filter() -> None:
+    """契約開時功率／電池只看尖峰；關時離峰可充不足會縮小。"""
+    day = "2024-07-01"
+    rows = []
+    for minute in (0, 15, 30, 45):
+        rows.append({"date": day, "hour": 10, "min": minute, "period": "peak", "kW": 1000.0})
+        rows.append({"date": day, "hour": 0, "min": minute, "period": "off_peak", "kW": 90.0})
+    df = pd.DataFrame(rows)
+    cap = {"regular_kw": 100}
+    common = dict(
+        tou_type="ThreeStage",
+        buffer_kw=0,
+        charge_eff=1.0,
+        soc_min=0.0,
+        soc_max=1.0,
+    )
+    closed = profile_stats(df, cap, **common)
+    opened = profile_stats(df, cap, ignore_off_peak=True, **common)
+    raw_batt = ceil_to_step(1000.0)
+    c_batt = float(closed["energy_shift"]["seeds"]["max"]["batt_kwh"])
+    o_batt = float(opened["energy_shift"]["seeds"]["max"]["batt_kwh"])
+    assert c_batt < raw_batt
+    assert o_batt == raw_batt
+    assert float(opened["pcs_sample"]["max"]) == ceil_to_step(1000)
+    assert float(opened["energy_shift"]["seeds"]["max"]["pcs_kw"]) == ceil_to_step(1000)
+    assert float(closed["pcs_sample"]["max"]) < float(opened["pcs_sample"]["max"])
 
 
 def _adjustment_contracts() -> dict[str, float]:
@@ -117,7 +145,9 @@ def _cycle_disp(*, daily_kwh: float, pcs_kw: float = 100.0, season: str = "summe
 
 def _assert_benefit_report(out: dict, *, pending: bool | None = None) -> dict:
     """效益報告金額皆由後端提供且維持加總恆等式。"""
-    report = out.get("benefit_report") or {}
+    evaluations = list((out.get("resultByPoint") or {}).values())
+    source = (evaluations[-1].get("final") if evaluations else None) or out
+    report = source.get("benefit_report") or {}
     summary = report.get("summary") or {}
     sections = report.get("sections") or {}
     assert {"basic", "energy", "overage", "extra"} <= set(sections)
@@ -144,6 +174,12 @@ def _assert_benefit_report(out: dict, *, pending: bool | None = None) -> dict:
     if pending is not None:
         assert bool(summary.get("pending")) is pending
     return report
+
+
+def _evaluated_final(out: dict) -> dict:
+    """取得最後一個量體評估結果。"""
+    evaluations = list((out.get("resultByPoint") or {}).values())
+    return (evaluations[-1].get("final") if evaluations else None) or {}
 
 
 def main() -> None:
@@ -428,7 +464,7 @@ def main() -> None:
     if rec["pcs_daily_avg_pct_summer"] is not None:
         assert rec["pcs_daily_avg_pct_summer"] <= 100.0
     assert rec["daily_cycle_pct_summer"] is None or rec["daily_cycle_pct_summer"] > 0
-    # 主報告 after 在無 stage2 時對齊推薦
+    # 主報告 after 在無後續評估時對齊推薦
     assert out["after"]["total"] == (rec or out["best_effort"])["after_total"]
     assert any(r["savings"] > 0 for r in out["grid"])
     assert out["viable"] is True
@@ -759,7 +795,6 @@ def main() -> None:
         "functions": ["tou", "demand"],
         "touScheduleMode": "auto",
         "demandBufferKw": 10,
-        "evaluateContractReduction": True,
         "socMin": 0.1,
         "socMax": 0.9,
         "chargeEff": 0.85,
@@ -777,10 +812,9 @@ def main() -> None:
         voltage_level="HV",
     )
     assert "contract_adjustment" not in adj_out
-    s2 = adj_out.get("stage2") or {}
-    final = s2.get("final") or {}
+    final = _evaluated_final(adj_out)
     sel = final.get("selected_contract") or {}
-    assert s2.get("enabled")
+    assert final
     assert "allowance_added_kw" in sel
     if sel.get("allowance_added_kw"):
         assert float(sel["allowance_added_kw"]) > 0
@@ -817,21 +851,22 @@ def main() -> None:
         end_date=str(r_df["date"].max()),
         voltage_level="HV",
     )
+    reserve_final = _evaluated_final(r_out)
     reserve_report = _assert_benefit_report(r_out, pending=False)
     assert reserve_report["sections"]["extra"]["visible"] is True
     assert int(reserve_report["summary"]["extra_income"]) == int(
-        (r_out.get("reserve_income") or {}).get("total") or 0
+        (reserve_final.get("reserve_income") or {}).get("total") or 0
     )
-    ri = r_out.get("reserve_income") or {}
+    ri = reserve_final.get("reserve_income") or {}
     assert "capacity" in ri and "performance" in ri and "activation_energy" in ri
     assert "energy" not in ri
     # 備轉可能因無淨增益回退；有投標收入或回退標記皆可
-    meta = r_out.get("reserve_meta") or {}
+    meta = reserve_final.get("reserve_meta") or {}
     assert int(ri.get("capacity") or 0) > 0 or meta.get("rolled_back") or meta.get("reason") == "no_net_gain"
-    split = r_out.get("benefit_split") or {}
+    split = reserve_final.get("benefit_split") or {}
     assert "sizing_savings" in split and "reserve_gain" in split
     reserve_summaries = {
-        item["id"]: item for item in (r_out.get("feature_summaries") or [])
+        item["id"]: item for item in (reserve_final.get("feature_summaries") or [])
     }
     assert set(reserve_summaries) == {"reserve"}
     reserve_summary = reserve_summaries["reserve"]
@@ -840,27 +875,22 @@ def main() -> None:
     assert "reserve_income" in {
         metric["key"] for metric in reserve_summary.get("metrics") or []
     }
-    assert int(r_out["savings"]) == int(split.get("total") or r_out["savings"])
-    assert int((r_out.get("after") or {}).get("energy_total") or 0) >= 0
-    assert "energy" not in (r_out.get("after") or {})
-    # BatchStage 備轉格數
+    assert int(reserve_final["savings"]) == int(split.get("total") or reserve_final["savings"])
+    assert int((reserve_final.get("after") or {}).get("energy_total") or 0) >= 0
+    assert "energy" not in (reserve_final.get("after") or {})
+    # 即時備轉固定 24 格，不跟時間電價 30 分
     from app.services.features.reserve import empty_schedule as _empty_sched
-    assert len(_empty_sched(30)["summer"]["weekday"]) == 48
+    assert len(_empty_sched(30)["summer"]["weekday"]) == 24
     assert len(_empty_sched(60)["summer"]["weekday"]) == 24
-    assert r_out.get("stage2") and r_out["stage2"].get("enabled") is True
-    assert r_out["stage2"].get("reserve") is True
-    # stage2 只處理推薦點；stage1 三點身分保留且不被覆寫
-    s1 = r_out.get("stage1") or {}
-    assert s1.get("recommended")
-    assert round(float(s1["recommended"]["pcs_kw"]), 3) == round(
+    assert len(r_out.get("resultByPoint") or {}) == 1
+    # 後續層只處理推薦點；容量層三點身分保留且不被覆寫
+    assert r_out.get("recommended")
+    assert round(float(reserve_final["pcs_kw"]), 3) == round(
         float(r_out["recommended"]["pcs_kw"]), 3
     )
-    assert round(float(s1["recommended"]["batt_kwh"]), 3) == round(
+    assert round(float(reserve_final["batt_kwh"]), 3) == round(
         float(r_out["recommended"]["batt_kwh"]), 3
     )
-    # stage2 只有一個 final 點
-    assert len(r_out["stage2"].get("points") or []) == 1
-    assert r_out["stage2"].get("final")
     # 網格列仍是第1層電費（無備轉合計混入）
     for row in r_out.get("grid") or []:
         assert int(row.get("reserve_income_total") or 0) == 0
@@ -870,7 +900,6 @@ def main() -> None:
     cut_settings = {
         **settings,
         "functions": ["tou", "demand"],
-        "evaluateContractReduction": True,
         "demandBufferKw": 10,
     }
     cut_out = run_size(
@@ -884,17 +913,18 @@ def main() -> None:
         voltage_level="HV",
     )
     cut_report = _assert_benefit_report(cut_out, pending=False)
-    assert cut_out.get("stage2") and cut_out["stage2"].get("evaluate_contract_reduction") is True
-    s1_before = (cut_out.get("stage1") or {}).get("before") or cut_out.get("before") or {}
-    # Stage2 before 必須與 Stage1 原始帳單同口徑（不可用降約後契約重算 before）
+    cut_final = _evaluated_final(cut_out)
+    assert cut_final
+    s1_before = cut_out.get("before") or {}
+    # 後續評估 before 必須與容量層原始帳單同口徑
     assert int(cut_report["sections"]["basic"]["before"]) == int(
         s1_before.get("basic_total") or 0
     )
     assert int(cut_report["sections"]["overage"]["before"]) == int(
         s1_before.get("overage_total") or 0
     )
-    assert len(cut_out["stage2"].get("points") or []) == 1
-    for pt in cut_out["stage2"].get("points") or []:
+    assert len(cut_out.get("resultByPoint") or {}) == 1
+    for pt in (cut_final,):
         cr = pt.get("contract_reduction") or {}
         assert "peak_grid_max_kw" in cr
         assert "half_peak_grid_max_kw" in cr
@@ -913,10 +943,10 @@ def main() -> None:
         else:
             assert proposed_total >= current_total
             assert rule_row.get("adopted") is False
-    assert cut_out.get("benefit_split")
-    assert "sizing_savings" in cut_out["benefit_split"]
+    assert cut_final.get("benefit_split")
+    assert "sizing_savings" in cut_final["benefit_split"]
     cut_summaries = {
-        item["id"]: item for item in (cut_out.get("feature_summaries") or [])
+        item["id"]: item for item in (cut_final.get("feature_summaries") or [])
     }
     assert set(cut_summaries) == {"demand"}
     assert cut_summaries["demand"]["status"] in {"adopted", "unchanged"}
@@ -1041,38 +1071,10 @@ def main() -> None:
         5000, abs(int(hi["after_total"])) // 5
     )
 
-    # 用電大戶：<5MW 不可用；≥5MW 仍 pending／skipped（義務未定）
-    from app.services.bess.dispatch import skipped_functions
-    assert "large_user" in skipped_functions(["tou", "large_user"])
-    lu_low = run_size(
-        df,
-        plan,
-        ContractCapacity(regular_kw=4999).to_dict(),
-        {**settings, "functions": ["tou", "large_user"]},
-        tou_type="ThreeStage",
-        start_date=str(df["date"].min()),
-        end_date=str(df["date"].max()),
-        voltage_level="HV",
-    )
-    assert lu_low.get("large_user_status") == "ineligible"
-    assert "large_user" in (lu_low.get("skipped") or [])
-    lu_hi = run_size(
-        df,
-        plan,
-        ContractCapacity(regular_kw=5000).to_dict(),
-        {**settings, "functions": ["tou", "large_user"]},
-        tou_type="ThreeStage",
-        start_date=str(df["date"].min()),
-        end_date=str(df["date"].max()),
-        voltage_level="HV",
-    )
-    assert lu_hi.get("large_user_status") == "pending"
-    assert "large_user" in (lu_hi.get("skipped") or [])
+    # 容量層不含契約／備轉；後續評估才補 proposal／feasibility
+    from app.services.bess.run import run_capacity, run_followup
 
-    # 兩段：stage1 不含契約／備轉；stage2 才補 proposal／feasibility
-    from app.services.bess.run import run_size_stage1, run_size_stage2
-
-    s1_only = run_size_stage1(
+    s1_only = run_capacity(
         df,
         plan,
         contracts,
@@ -1083,8 +1085,7 @@ def main() -> None:
         voltage_level="HV",
     )
     _assert_benefit_report(s1_only, pending=True)
-    assert s1_only.get("need_stage2") is True
-    assert s1_only.get("stage2") is None
+    assert not s1_only.get("resultByPoint")
     assert int((s1_only.get("benefit_split") or {}).get("contract_gain") or 0) == 0
     s1_summary_ids = {
         item["id"] for item in (s1_only.get("feature_summaries") or [])
@@ -1093,7 +1094,7 @@ def main() -> None:
     assert "demand" not in s1_summary_ids
     assert "reserve" not in s1_summary_ids
     s1_dispatch = int((s1_only.get("timing") or {}).get("dispatch_count") or 0)
-    s2_only = run_size_stage2(
+    s2_only = run_followup(
         s1_only,
         df,
         plan,
@@ -1105,21 +1106,58 @@ def main() -> None:
         voltage_level="HV",
     )
     _assert_benefit_report(s2_only, pending=False)
-    assert s2_only.get("stage2") and s2_only["stage2"].get("enabled")
-    fin = s2_only["stage2"]["final"]
+    fin = _evaluated_final(s2_only)
+    assert fin
     assert fin.get("proposal") and fin.get("constraints") and isinstance(fin.get("feasibility"), list)
     assert fin.get("feature_summaries")
-    assert s2_only.get("feature_summaries") == fin.get("feature_summaries")
     assert "demand" in {
         item["id"] for item in fin.get("feature_summaries") or []
     }
-    assert int(s2_only["savings"]) == int((s2_only.get("benefit_split") or {}).get("total") or 0)
-    # Stage2：1 次殘差調度 + 最多 1 次唯一提案重跑；選後不再多跑
+    assert int(fin["savings"]) == int((fin.get("benefit_split") or {}).get("total") or 0)
+    # 後續評估：1 次殘差調度 + 最多 1 次唯一提案重跑
     s2_dispatch = int((s2_only.get("timing") or {}).get("dispatch_count") or 0)
-    stage2_extra = s2_dispatch - s1_dispatch
-    assert stage2_extra <= 2
-    assert stage2_extra >= 1
+    evaluation_extra = s2_dispatch - s1_dispatch
+    assert evaluation_extra <= 2
+    assert evaluation_extra >= 1
     assert ((fin.get("proposal") or {}).get("contracts") or {}).get("rule")
+
+    # 正式三層：契約層不結算備轉；備轉沿用契約層 grid。
+    from app.services.bess.run import run_contract, run_reserve
+
+    combined_settings = {
+        **reserve_settings,
+        "functions": ["tou", "demand", "reserve"],
+        "demandBufferKw": 10,
+    }
+    contract_only = run_contract(
+        s1_only,
+        df,
+        plan,
+        contracts,
+        combined_settings,
+        tou_type="ThreeStage",
+        start_date=str(df["date"].min()),
+        end_date=str(df["date"].max()),
+        voltage_level="HV",
+    )
+    contract_final = _evaluated_final(contract_only)
+    assert int((contract_final.get("reserve_income") or {}).get("total") or 0) == 0
+    reserve_only = run_reserve(
+        contract_only,
+        df,
+        plan,
+        contracts,
+        combined_settings,
+        tou_type="ThreeStage",
+        start_date=str(df["date"].min()),
+        end_date=str(df["date"].max()),
+        voltage_level="HV",
+    )
+    pd.testing.assert_series_equal(
+        contract_only["_final_bundle"]["worksheet"]["grid_kw"],
+        reserve_only["_final_bundle"]["worksheet"]["grid_kw"],
+        check_names=False,
+    )
 
     # 備援摘要直接使用運算後 SOC 下限，不另做前端推算
     from app.services.bess.run import _feature_summaries
@@ -1139,7 +1177,7 @@ def main() -> None:
     }
     assert backup_metrics == {"backup_kwh": 150.0, "soc_min_pct": 25.0}
 
-    # 非推薦標註點也可跑 stage2；不覆寫頂層推薦口徑
+    # 非推薦標註點也可評估；不覆寫頂層推薦口徑
     rec_key = (
         round(float(fin["pcs_kw"]), 3),
         round(float(fin["batt_kwh"]), 3),
@@ -1157,7 +1195,7 @@ def main() -> None:
             alt = cand
             break
     assert alt is not None, "fixture grid needs a non-recommended size"
-    s2_alt = run_size_stage2(
+    s2_alt = run_followup(
         s1_only,
         df,
         plan,
@@ -1171,15 +1209,13 @@ def main() -> None:
         batt_kwh=float(alt["batt_kwh"]),
         baseline_contracts=contracts,
     )
-    alt_fin = (s2_alt.get("stage2") or {}).get("final") or {}
+    alt_fin = _evaluated_final(s2_alt)
     assert round(float(alt_fin["pcs_kw"]), 3) == round(float(alt["pcs_kw"]), 3)
     assert round(float(alt_fin["batt_kwh"]), 3) == round(float(alt["batt_kwh"]), 3)
     assert round(float(s2_alt["recommended"]["pcs_kw"]), 3) == round(
         float(s1_only["recommended"]["pcs_kw"]), 3
     )
-    alt_report = alt_fin.get("benefit_report") or (s2_alt.get("stage2") or {}).get(
-        "benefit_report"
-    )
+    alt_report = alt_fin.get("benefit_report")
     assert alt_report and alt_report.get("sections")
     s1_before_alt = (s1_only.get("before") or {})
     assert int(alt_report["sections"]["basic"]["before"]) == int(
@@ -1189,9 +1225,7 @@ def main() -> None:
         s1_before_alt.get("overage_total") or 0
     )
     # 各配置共用同一 before；after 才依量體不同
-    rec_report = (s2_only.get("stage2") or {}).get("final", {}).get(
-        "benefit_report"
-    ) or s2_only.get("benefit_report")
+    rec_report = fin.get("benefit_report")
     if rec_report and rec_report.get("sections"):
         assert int(alt_report["sections"]["basic"]["before"]) == int(
             rec_report["sections"]["basic"]["before"]
@@ -1202,13 +1236,12 @@ def main() -> None:
         assert int(alt_report["sections"]["energy"]["before"]) == int(
             rec_report["sections"]["energy"]["before"]
         )
-    # 頂層 savings／benefit 仍為 stage1；非推薦不覆寫推薦口徑
+    # 頂層 savings／benefit 仍為容量層；非推薦不覆寫推薦口徑
     assert int(s2_alt["savings"]) == int(s1_only["savings"])
     assert (s2_alt.get("benefit_split") or {}) == (s1_only.get("benefit_split") or {})
 
-    # Final Bundle：need_stage2 的 stage1 不物化；stage2 留下工作表
-    assert s1_only.get("_final_bundle") is None
-    assert s1_only.get("dispatch_charts") is None
+    # 容量層先物化選定曲線，後續層直接沿用。
+    assert s1_only.get("_final_bundle") is not None
     fb = s2_only.get("_final_bundle")
     assert isinstance(fb, dict) and fb.get("worksheet") is not None
     assert "ess_kw" in fb["worksheet"].columns and "grid_kw" in fb["worksheet"].columns
@@ -1230,7 +1263,7 @@ def main() -> None:
     again = views_from_worksheet(
         fb["worksheet"],
         plan,
-        fb.get("scheme_contracts") or contracts,
+        fb.get("adopted_contracts") or contracts,
         pcs_kw=float(fb["pcs_kw"]),
         batt_kwh=float(fb["batt_kwh"]),
         tou_type="ThreeStage",
@@ -1247,7 +1280,7 @@ def main() -> None:
         simulate={"functions": ["tou"]},
         pcs_kw=float(fb["pcs_kw"]),
         batt_kwh=float(fb["batt_kwh"]),
-        scheme_contracts=None,
+        adopted_contracts=None,
         functions=["tou"],
     )
     k_full = final_bundle_fingerprint(
@@ -1256,20 +1289,16 @@ def main() -> None:
         simulate={"functions": ["tou"]},
         pcs_kw=float(fb["pcs_kw"]),
         batt_kwh=float(fb["batt_kwh"]),
-        scheme_contracts=fb.get("scheme_contracts") or contracts,
+        adopted_contracts=fb.get("adopted_contracts") or contracts,
         functions=["tou"],
     )
-    assert k_size != k_full or (fb.get("scheme_contracts") in (None, contracts))
+    assert k_size != k_full or (fb.get("adopted_contracts") in (None, contracts))
     caches: dict = {}
     put_final_bundle(caches, k_full, fb)
     assert get_final_bundle(caches, k_full) is not None
 
-    # 無需 Stage2 時 stage1 直接物化
-    assert out.get("_final_bundle") is None or out.get("need_stage2") is False
-    if not out.get("need_stage2"):
-        # run_size 經 API 才 strip；此處直接呼叫仍可能帶 _final_bundle
-        pass
-    no_full = run_size_stage1(
+    # 無需後續評估時容量層直接物化
+    no_full = run_capacity(
         df,
         plan,
         contracts,
@@ -1279,12 +1308,13 @@ def main() -> None:
         end_date=str(df["date"].max()),
         voltage_level="HV",
     )
-    assert no_full.get("need_stage2") is False
     assert no_full.get("_final_bundle") is not None
     assert no_full.get("dispatch_charts") is not None
     assert "energy_total_delta" in (no_full.get("energy_transfer") or {})
 
-    sel_allow = ((cut_out.get("stage2") or {}).get("final") or {}).get("selected_contract") or {}
+    _assert_open_contract_filter()
+
+    sel_allow = _evaluated_final(cut_out).get("selected_contract") or {}
     print(
         "ok recommended",
         rec,

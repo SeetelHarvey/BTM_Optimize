@@ -1149,6 +1149,8 @@ a.btm-chip {
 .btm-matrix-wrap {
   position: relative;
   z-index: 1;
+  min-width: 0;
+  max-width: 100%;
   overflow: auto;
 }
 
@@ -1444,6 +1446,15 @@ a.btm-chip {
 }
 
 .sim-step--off { display: none; }
+
+.sim-step--review .ts-input:disabled,
+.sim-step--review .ts-select:disabled,
+.sim-step--review input:disabled,
+.sim-step--review select:disabled,
+.sim-step--review textarea:disabled {
+  opacity: 1;
+  cursor: default;
+}
 
 .sim-step-nav {
   display: flex;
@@ -2182,6 +2193,13 @@ a.btm-chip {
   display: grid;
   gap: 1rem;
   margin-top: 0.35rem;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.sim-report-sched__block {
+  min-width: 0;
+  max-width: 100%;
 }
 
 .sim-report-sched__block .btm-subhead {
@@ -2626,7 +2644,20 @@ a.btm-chip {
   transition: color 0.15s, background 0.15s, box-shadow 0.15s;
 }
 
-.sim-seg input { position: absolute; opacity: 0; pointer-events: none; }
+.sim-seg input,
+.sim-step--review .sim-seg input:disabled {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.sim-tab-check input,
+.sim-step--review .sim-tab-check input:disabled {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
 
 .sim-seg--on {
   color: var(--vf-accent-bright);
@@ -2662,6 +2693,8 @@ body.sim-sched-modal-open {
   position: relative;
   z-index: 1;
   width: min(1120px, 100%);
+  max-width: 100%;
+  min-width: 0;
   max-height: min(92vh, 920px);
   display: flex;
   flex-direction: column;
@@ -2705,26 +2738,20 @@ body.sim-sched-modal-open {
 .sim-sched-modal__body {
   padding: 0.85rem 1.1rem 1.1rem;
   overflow: auto;
+  min-width: 0;
   min-height: 0;
   flex: 1;
 }
 
-/* 30 分／48 欄：固定欄寬 + 橫向捲動，避免被 width:100% 壓扁 */
-.btm-matrix--dense,
-
-.sim-matrix--dense {
+/* 設定頁時段表 30 分／48 欄：固定欄寬 + 橫向捲動 */
+.btm-matrix--dense {
   width: max-content;
   min-width: 100%;
   table-layout: fixed;
 }
 
 .btm-matrix--dense th:first-child,
-
-.btm-matrix--dense td:first-child,
-
-.sim-matrix--dense th:first-child,
-
-.sim-matrix--dense td:first-child {
+.btm-matrix--dense td:first-child {
   position: sticky;
   left: 0;
   z-index: 3;
@@ -2735,36 +2762,58 @@ body.sim-sched-modal-open {
   box-shadow: 4px 0 10px rgb(0 0 0 / 0.35);
 }
 
-.btm-matrix--dense thead th:first-child,
-
-.sim-matrix--dense thead th:first-child {
+.btm-matrix--dense thead th:first-child {
   z-index: 4;
 }
 
 .btm-matrix--dense th:not(:first-child),
-
-.btm-matrix--dense td:not(:first-child),
-
-.sim-matrix--dense th:not(:first-child),
-
-.sim-matrix--dense td:not(:first-child) {
+.btm-matrix--dense td:not(:first-child) {
   width: 2.4rem;
   min-width: 2.4rem;
   max-width: 2.4rem;
   padding: 0;
 }
 
-.btm-matrix--dense thead th:not(:first-child),
-
-.sim-matrix--dense thead th:not(:first-child) {
+.btm-matrix--dense thead th:not(:first-child) {
   font-size: 0.62rem;
   padding: 0.2rem 0;
   text-align: center;
 }
 
-.sim-matrix--dense .sim-matrix__input {
-  font-size: 0.72rem;
-  padding: 0.38rem 0.05rem;
+/* 試算排程：欄寬跟數字走，過寬靠 wrap 橫向捲 */
+.sim-matrix {
+  width: max-content;
+  min-width: 100%;
+  table-layout: auto;
+}
+
+.sim-matrix th:first-child,
+.sim-matrix td:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 3;
+  width: 3.1rem;
+  min-width: 3.1rem;
+  background: var(--vf-bg-select-menu);
+  box-shadow: 4px 0 10px rgb(0 0 0 / 0.35);
+}
+
+.sim-matrix thead th:first-child {
+  z-index: 4;
+}
+
+.sim-matrix th:not(:first-child),
+.sim-matrix td:not(:first-child) {
+  width: auto;
+  min-width: 2.6rem;
+  max-width: none;
+  padding: 0;
+}
+
+.sim-matrix--dense thead th:not(:first-child) {
+  font-size: 0.62rem;
+  padding: 0.2rem 0;
+  text-align: center;
 }
 
 .sim-matrix td {
@@ -2779,20 +2828,22 @@ body.sim-sched-modal-open {
 
 .sim-matrix__input {
   display: block;
-  width: 100%;
-  min-width: 0;
+  width: auto;
+  min-width: 2.4rem;
+  max-width: none;
   box-sizing: border-box;
-  margin: 0;
-  padding: 0.28rem 0.05rem;
+  margin: 0 auto;
+  padding: 0.28rem 0.2rem;
   border: 0;
   border-radius: 0;
   background: transparent;
   color: inherit;
-  font-size: 0.68rem;
+  font-size: 0.72rem;
   text-align: center;
   font-variant-numeric: tabular-nums;
   appearance: textfield;
   -moz-appearance: textfield;
+  field-sizing: content;
 }
 
 .sim-matrix__input::-webkit-outer-spin-button,
@@ -2808,10 +2859,7 @@ body.sim-sched-modal-open {
   box-shadow: inset 0 0 0 1px rgb(var(--vf-accent-rgb) / 0.35);
 }
 
-.sim-obl--ok { color: #34d399; }
-.sim-obl--warn { color: #fbbf24; }
-
-/* sizing report */
+/* capacity / final report */
 .sim-report__meta {
   display: flex;
   flex-wrap: wrap;
@@ -3083,7 +3131,37 @@ body.sim-sched-modal-open {
   display: grid;
   grid-template-columns: repeat(4, minmax(7.5rem, 1fr));
   gap: 0.5rem 0.85rem;
-  margin-bottom: 0.85rem;
+  margin-bottom: 0.55rem;
+}
+
+.sim-dispatch-soc-stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.45rem 0.85rem;
+  margin: 0 0 0.85rem;
+}
+
+.sim-dispatch-soc-stat {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.25rem 0.75rem;
+  padding: 0.4rem 0.65rem;
+  border-radius: 0.45rem;
+  border: 1px solid rgb(255 255 255 / 0.08);
+  background: rgb(0 0 0 / 0.22);
+}
+
+.sim-dispatch-soc-stat__label {
+  font-size: 0.75rem;
+  color: rgb(255 255 255 / 0.62);
+}
+
+.sim-dispatch-soc-stat__value {
+  font-size: 0.9rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--vf-text-primary, #fff);
 }
 
 .sim-dispatch-toolbar .ts-field {
@@ -3202,6 +3280,10 @@ body.sim-sched-modal-open {
 
   .sim-dispatch-toolbar {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .sim-dispatch-soc-stats {
+    grid-template-columns: 1fr;
   }
 
   .sim-dispatch-grid {

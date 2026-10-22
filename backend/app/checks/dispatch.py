@@ -4,7 +4,7 @@ import pandas as pd
 
 from app.services.bess.device import Device
 from app.services.bess.dispatch import run
-from app.services.contracts import ContractCapacity
+from app.services.contract_rules import ContractCapacity
 from app.services.features import backup, tou
 from app.services.schedule import label_periods
 from app.services.tariff import annotate, select_plan
@@ -232,6 +232,58 @@ def main() -> None:
     )
     assert (a["ess_kw"] - b["ess_kw"]).abs().max() < 1e-9
     assert (a["soc"] - b["soc"]).abs().max() < 1e-9
+
+    # buffer=0、只勾 tou：仍套運行上限（貼齊契約）
+    zero_buf = run(
+        hot,
+        Device(pcs_kw=200, batt_kwh=400, soc_min=0.5, soc_max=0.9, charge_eff=0.85),
+        {**tou_base, "demandBufferKw": 0, "functions": ["tou"]},
+        tou_type="ThreeStage",
+        contracts=ContractCapacity(regular_kw=1000),
+        tou_step_minutes=60,
+        prices=prices,
+        period_schedule=sch,
+    )
+    assert float(zero_buf.iloc[0]["grid_kw"]) <= 1000.0 + 1e-6
+
+    # buffer=-100、只勾 tou：運行可到 ceiling+100；帳單仍計超約
+    from app.services.billing import calc_full_bill
+
+    allow = run(
+        hot,
+        Device(pcs_kw=200, batt_kwh=400, soc_min=0.5, soc_max=0.9, charge_eff=0.85),
+        {**tou_base, "demandBufferKw": -100, "functions": ["tou"]},
+        tou_type="ThreeStage",
+        contracts=ContractCapacity(regular_kw=1000),
+        tou_step_minutes=60,
+        prices=prices,
+        period_schedule=sch,
+    )
+    assert float(allow.iloc[0]["grid_kw"]) <= 1100.0 + 1e-6
+    assert float(allow.iloc[0]["grid_kw"]) > 1000.0 + 1e-6
+    bill_df = allow.assign(kW=allow["grid_kw"].to_numpy())
+    bill = calc_full_bill(
+        bill_df,
+        plan,
+        {"regular_kw": 1000},
+        tou_type="ThreeStage",
+        start_date="2024-07-01",
+        end_date="2024-07-01",
+        voltage_level="HV",
+    )
+    assert int(bill.get("overage_total") or 0) > 0
+
+    # buffer=-100、勾 demand：resolve 後生效 buffer=0（貼齊契約）
+    from app.services.features.grid_cap import resolve_buffer_kw
+
+    assert (
+        resolve_buffer_kw(
+            {"demandBufferKw": -100, "functions": ["tou", "demand"]},
+            contract_kw=1000,
+            key="demandBufferKw",
+        )
+        == 0.0
+    )
 
     print("ok", out[["kW", "ess_kw", "grid_kw", "soc", "period"]].head())
 

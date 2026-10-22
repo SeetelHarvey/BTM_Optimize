@@ -1,29 +1,19 @@
 """編排：各功能獨立算限制／意圖 → 中央仲裁 → device.apply。
 
-優先序：PCS／SOC → 備援／備轉 → 防逆送／契約邊界 → 防超約 → TOU → HOLD。
+優先序：PCS／SOC → 備援 → 防逆送／契約邊界 → 防超約 → TOU → HOLD。
+即時備轉不改 ess／grid，另在 settle 層標 reserve_call。
 """
 
 from typing import Any
 import pandas as pd
 
 from app.services.bess.device import Device, grid_kw
-from app.services.contracts import ContractCapacity
-from app.services.features import backup, demand, reserve, tou
-
-# ponytail: large_user 義務時段／履約公式未定，暫不進實作集合，勾選只標 skipped
-IMPLEMENTED_FUNCTIONS = frozenset(
-    {"tou", "demand", "backup", "reserve"}
-)
-
+from app.services.contract_rules import ContractCapacity
+from app.services.features import backup, tou
+from app.services.features import grid_cap
 
 def _month_key(date_val) -> str:
     return pd.Timestamp(date_val).strftime("%Y-%m")
-
-
-def skipped_functions(functions: list[str] | None) -> list[str]:
-    """勾選但未實作的功能。"""
-    fns = list(functions or ["tou"])
-    return sorted(f for f in fns if f not in IMPLEMENTED_FUNCTIONS)
 
 
 def _arbitrate(
@@ -50,7 +40,6 @@ def run(
     tou_type: str,
     contracts: dict[str, Any] | ContractCapacity,
     tou_step_minutes: int = 60,
-    bid_series: pd.Series | None = None,
     prices: dict | None = None,
     period_schedule: dict | None = None,
 ) -> pd.DataFrame:
@@ -62,11 +51,8 @@ def run(
 
     functions = set(settings.get("functions") or ["tou"])
     use_backup = "backup" in functions
-    use_reserve = "reserve" in functions and bid_series is not None
 
     buffer_kw = float(settings.get("demandBufferKw") or 0)
-    # 防超約：參數 buffer；契約容量功能也可啟用上限（第1層壓尖峰供第2層降容）
-    use_demand = "demand" in functions or buffer_kw > 0
 
     dev = device
     if use_backup:
@@ -124,32 +110,19 @@ def run(
         is_hol = bool(holidays[i])
         data_min = int(mins[i]) if mins[i] is not None and pd.notna(mins[i]) else None
 
-        # 2) 備轉硬佔用／待命 SOC
-        if use_reserve and bid_series is not None:
-            bid_mw = float(bid_series.iloc[i])
-            lo, hi = reserve.hard_occupy(lo, hi, bid_mw, dev.pcs_kw)
-            lo, hi = reserve.narrow_standby_soc(
-                lo,
-                hi,
-                soc=soc,
-                bid_mw=bid_mw,
-                device=dev,
-            )
+        # 2) 運行電網上限（契約 ceiling − 運行裕度）
+        month = _month_key(date_val)
+        cap_kw = grid_cap.cap_kw_for_row(
+            period=period,
+            month=month,
+            contracts=cap,
+            tou_type=tou_type,
+            buffer_kw=buffer_kw,
+        )
+        if cap_kw is not None:
+            lo, hi = grid_cap.narrow_grid_cap(lo, hi, load_kw=load, cap_kw=cap_kw)
 
-        # 3) 契約電網上限（防超約硬邊界）
-        if use_demand:
-            month = _month_key(date_val)
-            cap_kw = demand.cap_kw_for_row(
-                period=period,
-                month=month,
-                contracts=cap,
-                tou_type=tou_type,
-                buffer_kw=buffer_kw,
-            )
-            if cap_kw is not None:
-                lo, hi = demand.narrow_grid_cap(lo, hi, load_kw=load, cap_kw=cap_kw)
-
-        # 4–5) 軟意圖：防超約／TOU
+        # 3–4) 軟意圖：運行削峰／TOU
         tou_out = tou.intent(
             soc=soc,
             e_nom_kwh=dev.e_nom,
@@ -163,20 +136,16 @@ def run(
             tou_schedule=tou_schedule,
         )
         tou_desired = float(tou_out["desired_ess_kw"])
-        needs_shave = False
-        demand_desired = 0.0
-        if use_demand:
-            month = _month_key(date_val)
-            d_out = demand.intent(
-                load_kw=load,
-                period=period,
-                month=month,
-                contracts=cap,
-                tou_type=tou_type,
-                buffer_kw=buffer_kw,
-            )
-            needs_shave = bool(d_out["needs_shave"])
-            demand_desired = float(d_out["desired_ess_kw"])
+        d_out = grid_cap.intent(
+            load_kw=load,
+            period=period,
+            month=month,
+            contracts=cap,
+            tou_type=tou_type,
+            buffer_kw=buffer_kw,
+        )
+        needs_shave = bool(d_out["needs_shave"])
+        demand_desired = float(d_out["desired_ess_kw"])
 
         desired = _arbitrate(
             lo=lo,

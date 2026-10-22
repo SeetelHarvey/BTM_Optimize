@@ -16,13 +16,16 @@ def main() -> None:
         "reservePerformancePrice",
         "reserveEnergyPrice",
         "reserveMonthlyDispatchCount",
-        "evaluateContractReduction",
     ):
         assert key in sim
-        if key.startswith("evaluate"):
-            assert isinstance(sim[key], bool)
-        else:
-            assert float(sim[key]) >= 0
+        assert float(sim[key]) >= 0
+    assert "evaluateContractReduction" not in sim
+    assert sim.get("sizingFree") is False
+    from app.services.bess.size_grid import contract_sizing_open
+
+    assert contract_sizing_open({"functions": ["tou"]}) is False
+    assert contract_sizing_open({"functions": ["tou"], "sizingFree": True}) is True
+    assert contract_sizing_open({"functions": ["tou", "demand"]}) is True
     bundle = default_settings()
     assert "simulate" in bundle
     print("ok", sorted(sim.keys()))

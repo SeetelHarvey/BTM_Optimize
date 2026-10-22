@@ -3,7 +3,7 @@
 試算指紋契約：
 - plan／Form contracts／rates／schedule／holidays／overage＝輸入
 - simulate 只取計算欄；UI 導覽袋（wizardStep 等）一律略過
-- stage1＝量體＋電價調度；stage2＝綁定 stage1_key＋目標量體的契約／備轉
+- capacity＝決定容量；contract／reserve＝綁定 capacity_key＋目標量體
 """
 
 from __future__ import annotations
@@ -44,6 +44,7 @@ def profile_fingerprint(
     buffer_kw: float,
     charge_eff: float,
     include_half_peak: Any,
+    ignore_off_peak: bool = False,
 ) -> str:
     """profile／diagnosis（與勾選策略無關）。"""
     return "profile:" + stable_hash(
@@ -53,6 +54,7 @@ def profile_fingerprint(
             "buffer": buffer_kw,
             "eff": charge_eff,
             "half": include_half_peak,
+            "open_contract": bool(ignore_off_peak),
         }
     )
 
@@ -89,42 +91,87 @@ def simulate_for_fingerprint(simulate: dict | None) -> dict:
     return {k: v for k, v in simulate.items() if k not in SIM_UI_ONLY_KEYS}
 
 
-def stage1_fingerprint(
+_RESERVE_FP_KEYS = frozenset({
+    "reserveCapacityPrice",
+    "reservePerformancePrice",
+    "reserveEnergyPrice",
+    "reserveMonthlyDispatchCount",
+    "reserveSchedule",
+    "reserveScheduleMode",
+})
+
+
+def _simulate_without_reserve(simulate: dict | None) -> dict:
+    """capacity／contract 指紋：略過備轉欄。"""
+    base = simulate_for_fingerprint(simulate)
+    return {k: v for k, v in base.items() if k not in _RESERVE_FP_KEYS}
+
+
+def _simulate_reserve_only(simulate: dict | None) -> dict:
+    """reserve 指紋：只取備轉欄＋功能清單。"""
+    base = simulate_for_fingerprint(simulate)
+    out = {k: base[k] for k in _RESERVE_FP_KEYS if k in base}
+    if "functions" in base:
+        out["functions"] = base["functions"]
+    return out
+
+
+def capacity_fingerprint(
     *,
     plan_key: str,
     contracts: dict,
     simulate: dict,
     overage_rules: Any,
 ) -> str:
-    """量體＋電價調度（不含契約／備轉重算）。"""
-    return "stage1:" + stable_hash(
+    """決定容量（不含備轉欄；契約開關會影響篩選）。"""
+    return "capacity:" + stable_hash(
         {
             "plan": plan_key,
             "contracts": contracts,
-            "simulate": simulate_for_fingerprint(simulate),
+            "simulate": _simulate_without_reserve(simulate),
             "overage": overage_rules,
         }
     )
 
 
-def stage2_fingerprint(
+def contract_fingerprint(
     *,
-    stage1_key: str,
+    capacity_key: str,
     simulate: dict,
     overage_rules: Any,
     pcs_kw: float | None = None,
     batt_kwh: float | None = None,
 ) -> str:
-    """契約／備轉合併結果（綁定 stage1_key 與目標量體）。"""
+    """自動契約結果（綁定 capacity_key＋目標量體；不含備轉欄）。"""
     payload: dict[str, Any] = {
-        "stage1": stage1_key,
-        "simulate": simulate_for_fingerprint(simulate),
+        "capacity": capacity_key,
+        "simulate": _simulate_without_reserve(simulate),
         "overage": overage_rules,
     }
     if pcs_kw is not None and batt_kwh is not None:
         payload["pcs"] = round(float(pcs_kw), 3)
         payload["batt"] = round(float(batt_kwh), 3)
-    return "stage2:" + stable_hash(payload)
+    return "contract:" + stable_hash(payload)
+
+
+def reserve_fingerprint(
+    *,
+    upstream_key: str,
+    simulate: dict,
+    overage_rules: Any,
+    pcs_kw: float | None = None,
+    batt_kwh: float | None = None,
+) -> str:
+    """即時備轉結算（綁定上游鍵＋備轉欄＋目標量體）。"""
+    payload: dict[str, Any] = {
+        "upstream": upstream_key,
+        "simulate": _simulate_reserve_only(simulate),
+        "overage": overage_rules,
+    }
+    if pcs_kw is not None and batt_kwh is not None:
+        payload["pcs"] = round(float(pcs_kw), 3)
+        payload["batt"] = round(float(batt_kwh), 3)
+    return "reserve:" + stable_hash(payload)
 
 
 def compare_bill_fingerprint(
@@ -136,7 +183,7 @@ def compare_bill_fingerprint(
     batt_kwh: float,
     baseline_contracts: dict | None = None,
     baseline_tou: str | None = None,
-    scheme_contracts: dict | None = None,
+    adopted_contracts: dict | None = None,
 ) -> str:
     """方案比對完整電費（baseline vs scheme）。"""
     return "compare:" + stable_hash(
@@ -148,7 +195,7 @@ def compare_bill_fingerprint(
             "batt": round(float(batt_kwh), 3),
             "baseline_contracts": baseline_contracts,
             "baseline_tou": baseline_tou,
-            "scheme_contracts": scheme_contracts,
+            "adopted_contracts": adopted_contracts,
         }
     )
 
@@ -160,7 +207,7 @@ def final_bundle_fingerprint(
     simulate: dict,
     pcs_kw: float,
     batt_kwh: float,
-    scheme_contracts: dict | None = None,
+    adopted_contracts: dict | None = None,
     functions: list | None = None,
 ) -> str:
     """選定配置最終工作表（含採用契約與功能集合）。"""
@@ -171,7 +218,7 @@ def final_bundle_fingerprint(
             "simulate": simulate_for_fingerprint(simulate),
             "pcs": round(float(pcs_kw), 3),
             "batt": round(float(batt_kwh), 3),
-            "scheme_contracts": scheme_contracts,
+            "adopted_contracts": adopted_contracts,
             "functions": sorted(functions or []),
         }
     )
@@ -257,25 +304,25 @@ def _selfcheck() -> None:
         "seededImportKey": "b",
         "scenarioByTou": {"TwoStage": {"z": 1}},
     }
-    s1a = stage1_fingerprint(
+    s1a = capacity_fingerprint(
         plan_key=a, contracts={"regular_kw": 1}, simulate=ui_a, overage_rules=None
     )
-    s1b = stage1_fingerprint(
+    s1b = capacity_fingerprint(
         plan_key=a, contracts={"regular_kw": 1}, simulate=ui_b, overage_rules=None
     )
     assert s1a == s1b
-    f1 = stage2_fingerprint(stage1_key=s1a, simulate=ui_a, overage_rules=None)
-    f2 = stage2_fingerprint(stage1_key=s1a, simulate=ui_b, overage_rules=None)
+    f1 = contract_fingerprint(capacity_key=s1a, simulate=ui_a, overage_rules=None)
+    f2 = contract_fingerprint(capacity_key=s1a, simulate=ui_b, overage_rules=None)
     assert f1 == f2 and f1 != s1a
-    f3 = stage2_fingerprint(
-        stage1_key=s1a,
+    f3 = contract_fingerprint(
+        capacity_key=s1a,
         simulate=base_sim,
         overage_rules=None,
         pcs_kw=100.0,
         batt_kwh=200.0,
     )
-    f4 = stage2_fingerprint(
-        stage1_key=s1a,
+    f4 = contract_fingerprint(
+        capacity_key=s1a,
         simulate=base_sim,
         overage_rules=None,
         pcs_kw=100.0,
@@ -290,7 +337,7 @@ def _selfcheck() -> None:
         batt_kwh=200.0,
         baseline_contracts={"regular_kw": 1},
         baseline_tou="ThreeStage",
-        scheme_contracts=None,
+        adopted_contracts=None,
     )
     cmp2 = compare_bill_fingerprint(
         plan_key=a,
@@ -300,7 +347,7 @@ def _selfcheck() -> None:
         batt_kwh=200.0,
         baseline_contracts={"regular_kw": 1},
         baseline_tou="ThreeStage",
-        scheme_contracts=None,
+        adopted_contracts=None,
     )
     assert cmp1 == cmp2 and cmp1 != f3
     cmp3 = compare_bill_fingerprint(
@@ -311,7 +358,7 @@ def _selfcheck() -> None:
         batt_kwh=200.0,
         baseline_contracts={"regular_kw": 1},
         baseline_tou="ThreeStage",
-        scheme_contracts={"regular_kw": 90},
+        adopted_contracts={"regular_kw": 90},
     )
     assert cmp1 != cmp3
     fb1 = final_bundle_fingerprint(
@@ -320,7 +367,7 @@ def _selfcheck() -> None:
         simulate=ui_a,
         pcs_kw=100.0,
         batt_kwh=200.0,
-        scheme_contracts={"regular_kw": 90},
+        adopted_contracts={"regular_kw": 90},
         functions=["tou", "reserve"],
     )
     fb2 = final_bundle_fingerprint(
@@ -329,7 +376,7 @@ def _selfcheck() -> None:
         simulate=ui_b,
         pcs_kw=100.0004,
         batt_kwh=200.0,
-        scheme_contracts={"regular_kw": 90},
+        adopted_contracts={"regular_kw": 90},
         functions=["reserve", "tou"],
     )
     fb3 = final_bundle_fingerprint(
@@ -338,7 +385,7 @@ def _selfcheck() -> None:
         simulate=base_sim,
         pcs_kw=100.0,
         batt_kwh=200.0,
-        scheme_contracts=None,
+        adopted_contracts=None,
         functions=["tou"],
     )
     assert fb1 == fb2 and fb1 != fb3 and fb1 != cmp1
